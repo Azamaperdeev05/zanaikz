@@ -1,0 +1,6 @@
+# Барлық іздеу жүйелеріне рұқсат (Allow all)
+User-agent: *
+Allow: /
+
+# Sitemap сілтемесі
+Sitemap: https://zanaikz.vercel.app/sitemap.xml
