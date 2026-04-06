@@ -1,201 +1,234 @@
-import { useState, useEffect } from 'react';
-import { Book, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { db } from '../firebase';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { useState, useEffect, useMemo } from 'react';
+import { Book, Search, ChevronLeft, ChevronRight, ExternalLink, Filter, Scale } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-
-interface LegalDocument {
-  id: string;
-  title_kk: string;
-  title_ru: string;
-  doc_type: string;
-  category: string;
-  adilet_url: string;
-}
+import { useLangStore } from '../store/langStore';
+import { t } from '../utils/i18n';
+import { lawsData } from '../data/lawsData';
 
 export default function Laws() {
   const { user } = useAuthStore();
-  const [documents, setDocuments] = useState<LegalDocument[]>([]);
-  const [filteredDocs, setFilteredDocs] = useState<LegalDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { lang } = useLangStore();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
-  
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 6;
 
-  const categories = [
-    "Конституциялық құқық", "Азаматтық құқық", "Еңбек құқығы", 
-    "Отбасы құқығы", "Қылмыстық құқық", "Әкімшілік құқық", 
-    "Салық құқығы", "Жер құқығы"
-  ];
-
-  const docTypes = [
-    { value: 'kodeks', label: 'Кодекс' },
-    { value: 'zakon', label: 'Заң' },
-    { value: 'ukaz', label: 'Жарлық' },
-    { value: 'postanovlenie', label: 'Қаулы' }
-  ];
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchDocuments = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'legal_documents'));
-        const querySnapshot = await getDocs(q);
-        const docs: LegalDocument[] = [];
-        querySnapshot.forEach((doc) => {
-          docs.push({ id: doc.id, ...doc.data() } as LegalDocument);
+  // Flatten all acts with their branch info for global searching
+  const allActs = useMemo(() => {
+    const list: any[] = [];
+    lawsData.branches.forEach(branch => {
+      branch.acts.forEach(act => {
+        list.push({
+          ...act,
+          branch_kk: branch.branch_kk,
+          branch_ru: branch.branch_ru
         });
-        setDocuments(docs);
-        setFilteredDocs(docs);
-      } catch (error) {
-        console.error("Error fetching documents:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDocuments();
-  }, [user]);
+      });
+    });
+    return list;
+  }, []);
 
-  useEffect(() => {
-    let result = documents;
-    if (selectedCategory) result = result.filter(doc => doc.category === selectedCategory);
-    if (selectedDocType) result = result.filter(doc => doc.doc_type === selectedDocType);
+  const filteredActs = useMemo(() => {
+    let result = allActs;
+
+    if (selectedBranch) {
+      result = result.filter(act => act.branch_kk === selectedBranch || act.branch_ru === selectedBranch);
+    }
+
     if (searchQuery.trim()) {
-      const queryStr = searchQuery.toLowerCase();
-      result = result.filter(doc => 
-        (doc.title_kk && doc.title_kk.toLowerCase().includes(queryStr)) || 
-        (doc.title_ru && doc.title_ru.toLowerCase().includes(queryStr))
+      const q = searchQuery.toLowerCase();
+      result = result.filter(act => 
+        (act.title_kk && act.title_kk.toLowerCase().includes(q)) || 
+        (act.title_ru && act.title_ru.toLowerCase().includes(q))
       );
     }
-    setFilteredDocs(result);
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategory, selectedDocType, documents]);
 
-  const totalPages = Math.ceil(filteredDocs.length / itemsPerPage);
-  const paginatedDocs = filteredDocs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    return result;
+  }, [allActs, selectedBranch, searchQuery]);
+
+  const totalPages = Math.ceil(filteredActs.length / itemsPerPage);
+  const paginatedActs = filteredActs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handleBranchClick = (branchName: string) => {
+    setSelectedBranch(selectedBranch === branchName ? null : branchName);
+    setCurrentPage(1);
+  };
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#f5f5f7]">
-        <div className="text-center">
-          <h2 className="text-[20px] font-bold text-[#1d1d1f] mb-3">Заңнамаларды көру үшін кіріңіз</h2>
-          <a href="/login" className="text-[14px] font-medium text-white bg-[#0071e3] px-5 py-2 rounded-full hover:bg-[#0077ED] transition-colors">Кіру</a>
+      <div className="flex flex-col items-center justify-center h-[80vh] text-center px-4">
+        <div className="w-16 h-16 bg-[#0071e3]/10 rounded-2xl flex items-center justify-center mb-4">
+          <Book className="w-8 h-8 text-[#0071e3]" />
         </div>
+        <h2 className="text-[20px] font-bold text-[#1d1d1f] mb-2">{t(lang, 'laws', 'title') || 'Заңнамалар базасы'}</h2>
+        <p className="text-[14px] text-[#86868b] mb-6 max-w-xs">{t(lang, 'profile', 'authRequired')}</p>
+        <a href="/login" className="px-6 py-2.5 bg-[#0071e3] text-white rounded-full text-[14px] font-medium hover:bg-[#0077ED] transition-all">
+          {t(lang, 'nav', 'login')}
+        </a>
       </div>
     );
   }
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto h-full overflow-y-auto">
-      <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-1">Заңнамалар базасы</h1>
-      <p className="text-[14px] text-[#86868b] mb-8">ҚР заңнамалық актілерін іздеу және қарау</p>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full overflow-y-auto pb-32">
+      {/* Header Section */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-[#0071e3] rounded-lg">
+            <Scale className="w-5 h-5 text-white" />
+          </div>
+          <h1 className="text-[24px] md:text-[32px] font-extrabold text-[#1d1d1f] tracking-tight whitespace-nowrap">
+            {lang === 'kk' ? 'Заңнамалар базасы' : 'База законодательства'}
+          </h1>
+        </div>
+        <p className="text-[14px] md:text-[16px] text-[#86868b]">
+          {lang === 'kk' ? 'Қазақстан Республикасының қолданыстағы кодекстері мен заңдары' : 'Действующие кодексы и законы Республики Казахстан'}
+        </p>
+      </div>
 
-      {/* Search */}
-      <div className="flex flex-col md:flex-row gap-3 mb-8">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868b] w-4 h-4" />
+      {/* Control Bar */}
+      <div className="flex flex-col lg:flex-row gap-4 mb-8">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868b] w-4.5 h-4.5 group-focus-within:text-[#0071e3] transition-colors" />
           <input 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Іздеу…" 
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 focus:border-[#0071e3]/40 transition-all"
+            placeholder={lang === 'kk' ? 'Заңның атауы немесе түйінді сөз бойынша іздеу…' : 'Поиск по названию или ключевому слову…'} 
+            className="w-full pl-12 pr-4 py-3.5 bg-white border border-black/[0.05] rounded-2xl text-[15px] shadow-sm focus:outline-none focus:ring-4 focus:ring-[#0071e3]/10 focus:border-[#0071e3] transition-all"
           />
         </div>
-        <select 
-          value={selectedDocType || ''} 
-          onChange={(e) => setSelectedDocType(e.target.value || null)}
-          className="px-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30"
-        >
-          <option value="">Барлық түрлері</option>
-          {docTypes.map(type => (
-            <option key={type.value} value={type.value}>{type.label}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="grid md:grid-cols-4 gap-6">
-        {/* Categories */}
-        <div className="md:col-span-1 space-y-0.5">
-          <h3 className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-3 px-3">Санаттар</h3>
-          <button 
-            onClick={() => setSelectedCategory(null)}
-            className={`block w-full text-left px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
-              selectedCategory === null ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70 hover:bg-black/[0.03]'
-            }`}
-          >
-            Барлығы
-          </button>
-          {categories.map((cat, idx) => (
-            <button 
-              key={idx} 
-              onClick={() => setSelectedCategory(cat)}
-              className={`block w-full text-left px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
-                selectedCategory === cat ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70 hover:bg-black/[0.03]'
+        
+        {/* Mobile Filters Trigger (Optional UI enhancement) */}
+        <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar lg:hidden">
+          {lawsData.branches.map((b) => (
+            <button
+              key={b.order}
+              onClick={() => handleBranchClick(lang === 'kk' ? b.branch_kk : b.branch_ru)}
+              className={`px-4 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-all ${
+                (selectedBranch === b.branch_kk || selectedBranch === b.branch_ru)
+                  ? 'bg-black text-white'
+                  : 'bg-white text-[#1d1d1f]/70 border border-black/[0.05]'
               }`}
             >
-              {cat}
+              {lang === 'kk' ? b.branch_kk : b.branch_ru}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="grid lg:grid-cols-12 gap-8">
+        {/* Desktop Categories Sidebar */}
+        <aside className="hidden lg:block lg:col-span-3 space-y-2">
+          <div className="flex items-center gap-2 mb-4 px-3">
+            <Filter className="w-4 h-4 text-[#86868b]" />
+            <span className="text-[12px] font-bold text-[#86868b] uppercase tracking-widest">{lang === 'kk' ? 'Құқық салалары' : 'Отрасли права'}</span>
+          </div>
+          <button 
+            onClick={() => setSelectedBranch(null)}
+            className={`w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium transition-all ${
+              selectedBranch === null ? 'bg-[#0071e3] text-white shadow-lg shadow-[#0071e3]/20' : 'text-[#1d1d1f]/70 hover:bg-black/[0.04]'
+            }`}
+          >
+            {lang === 'kk' ? 'Барлық заңдар' : 'Все законы'}
+          </button>
+          {lawsData.branches.map((b) => (
+            <button 
+              key={b.order} 
+              onClick={() => handleBranchClick(lang === 'kk' ? b.branch_kk : b.branch_ru)}
+              className={`w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium transition-all ${
+                (selectedBranch === b.branch_kk || selectedBranch === b.branch_ru)
+                  ? 'bg-[#0071e3] text-white shadow-lg shadow-[#0071e3]/20'
+                  : 'text-[#1d1d1f]/70 hover:bg-black/[0.04]'
+              }`}
+            >
+              {lang === 'kk' ? b.branch_kk : b.branch_ru}
+            </button>
+          ))}
+        </aside>
         
-        {/* Documents */}
-        <div className="md:col-span-3 space-y-3">
-          {loading ? (
-            <div className="text-center py-16 text-[#86868b] text-[14px]">Жүктелуде…</div>
-          ) : paginatedDocs.length > 0 ? (
-            <>
-              {paginatedDocs.map((doc) => (
-                <div key={doc.id} className="bg-white p-5 rounded-2xl border border-black/[0.04] hover:border-black/[0.08] transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 bg-[#0071e3]/[0.08] rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Book className="w-4 h-4 text-[#0071e3]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-semibold text-[#1d1d1f] leading-snug">{doc.title_kk || doc.title_ru}</h3>
-                      {doc.title_kk && doc.title_ru && (
-                        <p className="text-[13px] text-[#86868b] mt-1">{doc.title_ru}</p>
-                      )}
-                      <div className="flex gap-2 mt-2.5">
-                        {doc.category && (
-                          <span className="px-2.5 py-0.5 bg-[#f5f5f7] text-[#86868b] text-[11px] font-medium rounded-full">{doc.category}</span>
-                        )}
-                        {doc.doc_type && (
-                          <span className="px-2.5 py-0.5 bg-[#0071e3]/[0.06] text-[#0071e3] text-[11px] font-medium rounded-full">
-                            {docTypes.find(t => t.value === doc.doc_type)?.label || doc.doc_type}
-                          </span>
-                        )}
+        {/* Acts Grid */}
+        <div className="lg:col-span-9 space-y-4">
+          {paginatedActs.length > 0 ? (
+            <div className="grid md:grid-cols-2 gap-4">
+              {paginatedActs.map((act, idx) => (
+                <div 
+                  key={idx} 
+                  className="bg-white/70 backdrop-blur-sm p-6 rounded-[24px] border border-black/[0.03] hover:border-[#0071e3]/30 hover:shadow-xl hover:shadow-black/[0.02] transition-all group flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className={`p-2.5 rounded-xl ${
+                        act.type === 'Kodeks' ? 'bg-[#0071e3]/10 text-[#0071e3]' : 'bg-black/5 text-[#1d1d1f]'
+                      }`}>
+                        <Book className="w-5 h-5" />
                       </div>
-                      {doc.adilet_url && (
-                        <a href={doc.adilet_url} target="_blank" rel="noreferrer" className="inline-block mt-3 text-[13px] text-[#0071e3] hover:underline">
-                          Толық мәтін →
-                        </a>
-                      )}
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${
+                         act.type === 'Kodeks' ? 'bg-[#0071e3] text-white' : 'bg-black text-white'
+                      }`}>
+                        {act.type}
+                      </span>
                     </div>
+                    <h3 className="text-[16px] font-bold text-[#1d1d1f] leading-tight mb-2 group-hover:text-[#0071e3] transition-colors line-clamp-2">
+                      {lang === 'kk' ? act.title_kk : act.title_ru}
+                    </h3>
+                    <p className="text-[12px] text-[#86868b] mb-4">
+                      {lang === 'kk' ? act.branch_kk : act.branch_ru}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-black/[0.03]">
+                    <span className="text-[12px] font-medium text-[#86868b]">ID: {act.doc_id}</span>
+                    <a 
+                      href={act.url} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="flex items-center gap-1.5 text-[13px] font-bold text-[#0071e3] hover:translate-x-1 transition-transform"
+                    >
+                      {lang === 'kk' ? 'Оқу' : 'Читать'}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
               ))}
-              
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 mt-6">
-                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-white border border-black/[0.06] rounded-lg disabled:opacity-30 hover:bg-[#f5f5f7] transition-colors">
-                    <ChevronLeft className="w-4 h-4 text-[#1d1d1f]" />
-                  </button>
-                  <span className="text-[13px] text-[#86868b] font-medium">{currentPage} / {totalPages}</span>
-                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-white border border-black/[0.06] rounded-lg disabled:opacity-30 hover:bg-[#f5f5f7] transition-colors">
-                    <ChevronRight className="w-4 h-4 text-[#1d1d1f]" />
-                  </button>
-                </div>
-              )}
-            </>
+            </div>
           ) : (
-            <div className="text-center py-16 text-[#86868b] text-[14px] bg-white rounded-2xl border border-black/[0.04]">
-              Құжаттар табылмады.
+            <div className="bg-white rounded-[32px] p-16 text-center border border-black/[0.04]">
+              <div className="w-16 h-16 bg-[#f5f5f7] rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="w-8 h-8 text-[#86868b]" />
+              </div>
+              <h3 className="text-[18px] font-bold text-[#1d1d1f] mb-2">
+                {lang === 'kk' ? 'Ештеңе табылмады' : 'Ничего не найдено'}
+              </h3>
+              <p className="text-[14px] text-[#86868b]">
+                {lang === 'kk' ? 'Басқа сөздермен іздеп көріңіз немесе сүзгіні өзгертіңіз' : 'Попробуйте изменить поисковый запрос или фильтры'}
+              </p>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8 bg-white/50 backdrop-blur-md p-3 rounded-2xl w-fit mx-auto border border-black/[0.03]">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                disabled={currentPage === 1} 
+                className="p-2.5 bg-white border border-black/[0.05] rounded-xl disabled:opacity-30 hover:bg-[#f5f5f7] hover:scale-105 transition-all shadow-sm"
+              >
+                <ChevronLeft className="w-4.5 h-4.5 text-[#1d1d1f]" />
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-bold text-[#1d1d1f]">{currentPage}</span>
+                <span className="text-[14px] text-[#86868b]">/</span>
+                <span className="text-[14px] font-medium text-[#86868b]">{totalPages}</span>
+              </div>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                disabled={currentPage === totalPages} 
+                className="p-2.5 bg-white border border-black/[0.05] rounded-xl disabled:opacity-30 hover:bg-[#f5f5f7] hover:scale-105 transition-all shadow-sm"
+              >
+                <ChevronRight className="w-4.5 h-4.5 text-[#1d1d1f]" />
+              </button>
             </div>
           )}
         </div>

@@ -1,8 +1,10 @@
 import { Outlet, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { logOut } from '../firebase';
-import { MessageSquare, BookOpen, Users, FileText, Calculator, AlertTriangle, LogOut, Menu, X, Settings, PanelLeftClose, PanelLeftOpen, Scale, Loader2 } from 'lucide-react';
+import { MessageSquare, BookOpen, Users, FileText, Calculator, AlertTriangle, LogOut, Menu, X, Settings, PanelLeftClose, PanelLeftOpen, Scale, Loader2, Globe } from 'lucide-react';
 import { useState } from 'react';
+import { useLangStore } from '../store/langStore';
+import { t } from '../utils/i18n';
 
 export default function Layout() {
   const { user, loading } = useAuthStore();
@@ -10,6 +12,7 @@ export default function Layout() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { lang, setLang } = useLangStore();
 
   // Show loading while auth state initializes
   if (loading) {
@@ -17,7 +20,7 @@ export default function Layout() {
       <div className="flex items-center justify-center h-screen bg-[#f5f5f7]">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-[#0071e3] mx-auto mb-3" />
-          <p className="text-[14px] text-[#86868b]">Жүктелуде...</p>
+          <p className="text-[14px] text-[#86868b]">{t(lang, 'nav', 'loading')}</p>
         </div>
       </div>
     );
@@ -34,141 +37,112 @@ export default function Layout() {
   };
 
   const navItems = [
-    { name: 'Чат', path: '/chat', icon: MessageSquare },
-    { name: 'Заңнамалар', path: '/laws', icon: BookOpen },
-    { name: 'Заңгерлер', path: '/lawyers', icon: Users },
-    { name: 'Құжат үлгілері', path: '/templates', icon: FileText },
-    { name: 'Калькуляторлар', path: '/calculators', icon: Calculator },
-    { name: 'SOS', path: '/sos', icon: AlertTriangle, color: 'text-[#ff3b30]' },
-    { name: 'Баптаулар', path: '/profile', icon: Settings },
+    { name: t(lang, 'nav', 'chat'), path: '/chat', icon: MessageSquare },
+    { name: t(lang, 'nav', 'laws'), path: '/laws', icon: BookOpen },
+    { name: t(lang, 'nav', 'lawyers'), path: '/lawyers', icon: Users },
+    { name: t(lang, 'nav', 'templates'), path: '/templates', icon: FileText },
+    { name: t(lang, 'nav', 'calculators'), path: '/calculators', icon: Calculator },
+    { name: t(lang, 'nav', 'sos'), path: '/sos', icon: AlertTriangle, color: 'text-[#ff3b30]' },
+    { name: t(lang, 'nav', 'settings'), path: '/profile', icon: Settings },
   ];
 
   return (
-    <div className="flex h-screen bg-[#f5f5f7]">
-      {/* Sidebar (Desktop) */}
-      <aside 
-        className={`hidden md:flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/[0.06] transition-all duration-300 ease-in-out ${
-          isSidebarCollapsed ? 'w-0 overflow-hidden opacity-0 border-none' : 'w-[240px] opacity-100'
-        }`}
-      >
-        <div className="p-4 border-b border-black/[0.04] flex justify-between items-center whitespace-nowrap">
-          <Link to="/" className="flex items-center gap-2">
-            <Scale className="w-4.5 h-4.5 text-[#1d1d1f]" />
-            <span className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">ЗаңКеңес AI</span>
-          </Link>
-          <button 
-            onClick={() => setIsSidebarCollapsed(true)} 
-            className="p-1.5 text-[#86868b] hover:text-[#1d1d1f] hover:bg-black/[0.04] rounded-lg transition-colors" 
-            title="Жабу"
+    <div className="flex flex-col h-screen bg-[#f5f5f7] overflow-hidden">
+      {/* Universal Header - Redesigned for Premium Look */}
+      <header className="flex items-center justify-between px-4 md:px-8 py-3 md:py-4 bg-white/40 backdrop-blur-2xl border-b border-black/[0.03] z-[100] sticky top-0">
+        <Link to="/" className="flex items-center gap-2 md:gap-3 group">
+          <div className="w-7 h-7 md:w-9 md:h-9 bg-[#1d1d1f] rounded-[10px] flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:shadow-black/10">
+            <Scale className="w-4 h-4 md:w-5 md:h-5 text-white" />
+          </div>
+          <span className="text-[15px] md:text-[18px] font-bold text-[#1d1d1f] tracking-tight whitespace-nowrap">
+            ЗаңКеңес<span className="text-[#0071e3]">AI</span>
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-2 md:gap-5">
+          {/* Language Switcher - Compact on Mobile */}
+          <button
+            onClick={() => setLang(lang === 'kk' ? 'ru' : 'kk')}
+            className="flex items-center gap-1.5 px-2.5 md:px-4 py-1.5 md:py-2 text-[12px] md:text-[13px] font-semibold text-[#1d1d1f]/80 bg-black/[0.04] hover:bg-black/[0.08] rounded-full transition-all active:scale-95"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#0071e3]" />
+            <span>{lang === 'kk' ? 'ҚАЗ' : 'РУС'}</span>
           </button>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto whitespace-nowrap">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-2.5 px-3 py-[7px] rounded-lg transition-all text-[13px] ${
-                location.pathname.startsWith(item.path)
-                  ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold'
-                  : `text-[#1d1d1f]/70 hover:bg-black/[0.04] ${item.color || ''}`
-              }`}
-            >
-              <item.icon className="w-[18px] h-[18px] flex-shrink-0" />
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-        <div className="p-3 border-t border-black/[0.04] whitespace-nowrap">
-          {user ? (
-            <div className="flex items-center justify-between gap-2">
-              <Link to="/profile" className="flex-1 min-w-0 hover:bg-black/[0.03] p-2 rounded-lg transition-colors">
-                <p className="font-medium text-[13px] text-[#1d1d1f] truncate">{user.displayName || 'Пайдаланушы'}</p>
-                <p className="text-[#86868b] truncate text-[11px]">{user.email}</p>
+          
+          {user && (
+            <div className="flex items-center gap-2 md:gap-4 pl-2 md:pl-5 border-l border-black/[0.06]">
+              <Link to="/profile" className="flex items-center gap-2 group">
+                <div className="hidden sm:block text-right">
+                  <p className="text-[12px] md:text-[13px] font-bold text-[#1d1d1f] leading-none mb-1 group-hover:text-[#0071e3] transition-colors">{user.displayName || t(lang, 'common', 'user')}</p>
+                  <p className="text-[10px] md:text-[11px] text-[#86868b] leading-none">{user.email}</p>
+                </div>
+                <div className="w-7 h-7 md:w-8 md:h-8 bg-black/[0.03] rounded-full border border-black/[0.05] flex items-center justify-center group-hover:bg-[#0071e3]/10 transition-colors">
+                  <Settings className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#86868b] group-hover:text-[#0071e3]" />
+                </div>
               </Link>
-              <button onClick={handleLogout} className="p-2 text-[#86868b] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10 rounded-lg flex-shrink-0 transition-colors" title="Шығу">
-                <LogOut className="w-4 h-4" />
+              
+              <button 
+                onClick={handleLogout} 
+                className="p-1.5 md:p-2 text-[#86868b] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10 rounded-full transition-all active:scale-90"
+                title={t(lang, 'nav', 'logout')}
+              >
+                <LogOut className="w-4 h-4 md:w-5 md:h-5" />
               </button>
             </div>
-          ) : (
-            <Link to="/login" className="block w-full py-2 text-center text-white bg-[#0071e3] rounded-lg hover:bg-[#0077ED] text-[13px] font-medium transition-colors">
-              Кіру
-            </Link>
           )}
         </div>
-      </aside>
+      </header>
 
-      {/* Mobile Header */}
-      <div className="md:hidden flex flex-col w-full h-full">
-        <header className="flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur-xl border-b border-black/[0.06]">
-          <Link to="/" className="flex items-center gap-2">
-            <Scale className="w-4 h-4 text-[#1d1d1f]" />
-            <span className="text-[15px] font-semibold text-[#1d1d1f] tracking-tight">ЗаңКеңес AI</span>
-          </Link>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-1.5 text-[#86868b]">
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </header>
-
-        {isMobileMenuOpen && (
-          <div className="absolute top-[49px] left-0 right-0 bottom-0 bg-white/95 backdrop-blur-xl z-50 flex flex-col">
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] ${
-                    location.pathname.startsWith(item.path)
-                      ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold'
-                      : `text-[#1d1d1f]/70 ${item.color || ''}`
-                  }`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
-            <div className="p-4 border-t border-black/[0.04]">
-              {user ? (
-                <div className="space-y-3">
-                  <div className="px-4 py-2.5 bg-[#f5f5f7] rounded-xl">
-                    <p className="font-medium text-[#1d1d1f] text-[14px] truncate">{user.displayName || 'Пайдаланушы'}</p>
-                    <p className="text-[#86868b] truncate text-[12px]">{user.email}</p>
-                  </div>
-                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="flex items-center justify-center gap-2 w-full py-3 text-[#ff3b30] bg-[#ff3b30]/[0.06] rounded-xl text-[14px] font-medium">
-                    <LogOut className="w-4 h-4" />
-                    Шығу
-                  </button>
-                </div>
-              ) : (
-                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="block w-full py-3 text-center text-white bg-[#0071e3] rounded-xl text-[14px] font-medium">
-                  Кіру
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-
-        <main className="flex-1 overflow-hidden relative">
-          <Outlet />
-        </main>
-      </div>
-
-      {/* Desktop Main Content Area */}
-      <main className="hidden md:flex flex-1 overflow-hidden relative flex-col">
-        {isSidebarCollapsed && (
-          <button 
-            onClick={() => setIsSidebarCollapsed(false)} 
-            className="absolute top-3 left-3 z-50 p-1.5 bg-white/80 backdrop-blur-xl border border-black/[0.06] rounded-lg text-[#86868b] hover:text-[#1d1d1f] hover:bg-white transition-colors"
-            title="Ашу"
-          >
-            <PanelLeftOpen className="w-4 h-4" />
-          </button>
-        )}
+      <main className="flex-1 overflow-hidden relative flex-col flex">
         <Outlet />
       </main>
+
+      <div className="hidden md:block absolute bottom-8 left-1/2 -translate-x-1/2 z-[100]">
+        <nav className="flex items-center gap-1.5 p-1.5 bg-black/90 backdrop-blur-3xl rounded-[28px] border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+          {navItems.map((item) => {
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`relative flex items-center gap-2.5 px-5 py-3 rounded-[22px] transition-all duration-300 group ${
+                  isActive 
+                    ? 'bg-white/15 text-white' 
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <item.icon className={`w-[18px] h-[18px] transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
+                <span className="text-[14px] font-semibold tracking-tight whitespace-nowrap">
+                  {item.name}
+                </span>
+                {isActive && (
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-1 bg-[#0071e3] rounded-full shadow-[0_0_12px_rgba(0,113,227,1)]" />
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Mobile Navigation (Pill style too) */}
+      <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-[400px]">
+        <nav className="flex items-center justify-around p-2 bg-black/90 backdrop-blur-2xl rounded-full border border-white/10 shadow-2xl">
+          {navItems.slice(0, 5).map((item) => {
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`p-3 rounded-full transition-all duration-300 ${
+                  isActive ? 'bg-white/20 text-white' : 'text-white/40'
+                }`}
+              >
+                <item.icon className="w-6 h-6" />
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
     </div>
   );
 }

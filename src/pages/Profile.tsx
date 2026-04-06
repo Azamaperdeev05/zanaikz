@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { User, Globe, MapPin, Loader2, CheckCircle2 } from 'lucide-react';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { User, Globe, MapPin, Loader2, CheckCircle2, PieChart, TrendingUp, Search } from 'lucide-react';
+import { useLangStore } from '../store/langStore';
+import { t } from '../utils/i18n';
 
 export default function Profile() {
   const { user } = useAuthStore();
@@ -10,11 +12,16 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
+  const { lang, setLang } = useLangStore();
+  
   const [formData, setFormData] = useState({
     full_name: '',
-    language: 'kk',
+    language: lang,
     region: ''
   });
+
+  const [analytics, setAnalytics] = useState<{ topic: string, count: number }[]>([]);
+  const [analyzing, setAnalyzing] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -30,14 +37,58 @@ export default function Profile() {
             region: data.region || ''
           });
         }
+        
+        // Fetch sessions for analytics
+        const q = query(collection(db, 'sessions'), where('userId', '==', user.uid));
+        const sessionsSnap = await getDocs(q);
+        
+        const topicsCount: Record<string, number> = {};
+        let total = 0;
+        
+        sessionsSnap.forEach(snap => {
+          const title = snap.data().title?.toLowerCase() || '';
+          if (title === 'жаңа чат' || title === 'новый чат') return;
+          
+          let matched = false;
+          // Simple keyword matching
+          const keywords = [
+            { k: ['алимент', 'бала', 'неке', 'ажырасу'], t: lang === 'kk' ? 'Отбасы құқығы' : 'Семейное право' },
+            { k: ['салық', 'көлік', 'айыппұл'], t: lang === 'kk' ? 'Салық және Айыппұл' : 'Налоги и Штрафы' },
+            { k: ['еңбек', 'демалыс', 'жұмыс', 'өтемақы', 'декрет'], t: lang === 'kk' ? 'Еңбек қатынастары' : 'Трудовые отношения' },
+            { k: ['несие', 'қарыз', 'банк', 'мүлік'], t: lang === 'kk' ? 'Мүлік және Қаржы' : 'Имущество и Финансы' }
+          ];
+          
+          for (const grp of keywords) {
+            if (grp.k.some(kw => title.includes(kw))) {
+              topicsCount[grp.t] = (topicsCount[grp.t] || 0) + 1;
+              matched = true;
+              total++;
+              break;
+            }
+          }
+          
+          if (!matched && title.length > 0) {
+            const otherTopic = lang === 'kk' ? 'Басқа сұрақтар' : 'Другие вопросы';
+            topicsCount[otherTopic] = (topicsCount[otherTopic] || 0) + 1;
+            total++;
+          }
+        });
+        
+        const sortedTopics = Object.entries(topicsCount)
+          .map(([topic, count]) => ({ topic, count: Math.round((count / total) * 100) }))
+          .sort((a, b) => b.count - a.count);
+          
+        setAnalytics(sortedTopics);
+
       } catch (error) {
         console.error("Error fetching profile:", error);
       } finally {
         setLoading(false);
+        setAnalyzing(false);
       }
     };
     fetchProfile();
-  }, [user]);
+  }, [user, lang]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -54,11 +105,15 @@ export default function Profile() {
         language: formData.language,
         region: formData.region
       });
-      setMessage({ type: 'success', text: 'Сақталды.' });
+      // Sync global state immediately
+      if (formData.language === 'kk' || formData.language === 'ru') {
+        setLang(formData.language);
+      }
+      setMessage({ type: 'success', text: t(lang, 'profile', 'save') + ' ✅' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error("Error updating profile:", error);
-      setMessage({ type: 'error', text: 'Қате пайда болды.' });
+      setMessage({ type: 'error', text: 'Error' });
     } finally {
       setSaving(false);
     }
@@ -80,8 +135,8 @@ export default function Profile() {
   }
 
   return (
-    <div className="p-5 lg:p-8 max-w-[520px] mx-auto h-full overflow-y-auto">
-      <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-8">Баптаулар</h1>
+    <div className="p-5 lg:p-8 max-w-[520px] mx-auto h-full overflow-y-auto w-full">
+      <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-8">{t(lang, 'profile', 'title')}</h1>
       
       {/* Avatar / Info */}
       <div className="flex items-center gap-4 mb-8">
@@ -89,7 +144,7 @@ export default function Profile() {
           <User className="w-7 h-7 text-[#0071e3]" />
         </div>
         <div>
-          <h2 className="text-[17px] font-semibold text-[#1d1d1f]">{formData.full_name || user.displayName || 'Пайдаланушы'}</h2>
+          <h2 className="text-[17px] font-semibold text-[#1d1d1f]">{formData.full_name || user.displayName || t(lang, 'common', 'user')}</h2>
           <p className="text-[13px] text-[#86868b]">{user.email}</p>
         </div>
       </div>
@@ -103,10 +158,10 @@ export default function Profile() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5 mb-10">
         {/* Name */}
         <div>
-          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Аты-жөні</label>
+          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">{t(lang, 'profile', 'fullName')}</label>
           <input
             type="text"
             name="full_name"
@@ -118,7 +173,7 @@ export default function Profile() {
 
         {/* Language */}
         <div>
-          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Интерфейс тілі</label>
+          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Интерфейс тілі / Язык интерфейса</label>
           <div className="flex bg-[#f5f5f7] p-1 rounded-xl border border-black/[0.04]">
             <button 
               type="button"
@@ -139,13 +194,13 @@ export default function Profile() {
 
         {/* Region */}
         <div>
-          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Аймақ</label>
+          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">{lang === 'kk' ? 'Аймақ' : 'Регион'}</label>
           <input
             type="text"
             name="region"
             value={formData.region}
             onChange={handleChange}
-            placeholder="Мысалы: Астана"
+            placeholder={lang === 'kk' ? 'Мысалы: Астана' : 'Например: Астана'}
             className="block w-full px-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 transition-all"
           />
         </div>
@@ -158,10 +213,48 @@ export default function Profile() {
             className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#0071e3] text-white rounded-xl hover:bg-[#0077ED] disabled:opacity-50 transition-colors text-[14px] font-medium"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {saving ? 'Сақтау…' : 'Сақтау'}
+            {saving ? t(lang, 'nav', 'loading') : t(lang, 'profile', 'save')}
           </button>
         </div>
       </form>
+
+      {/* Analytics Section */}
+      <div className="border-t border-black/[0.04] pt-8 pb-12">
+        <div className="flex items-center gap-2 mb-2">
+          <PieChart className="w-5 h-5 text-[#0071e3]" />
+          <h2 className="text-[18px] font-semibold text-[#1d1d1f]">{t(lang, 'profile', 'historyTitle')}</h2>
+        </div>
+        <p className="text-[13px] text-[#86868b] mb-6">{t(lang, 'profile', 'historyDesc')}</p>
+
+        {analyzing ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-[#86868b]" />
+          </div>
+        ) : analytics.length > 0 ? (
+          <div className="space-y-4">
+            {analytics.map((item, idx) => (
+              <div key={idx}>
+                <div className="flex justify-between text-[13px] mb-1.5">
+                  <span className="font-medium text-[#1d1d1f]">{item.topic}</span>
+                  <span className="text-[#86868b] font-medium">{item.count}%</span>
+                </div>
+                <div className="h-2 w-full bg-[#f5f5f7] rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#0071e3] to-[#42a1ff] rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${item.count}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-[#f5f5f7] rounded-2xl border border-black/[0.03]">
+            <Search className="w-8 h-8 text-[#86868b]/50 mx-auto mb-2" />
+            <p className="text-[13px] text-[#86868b]">{t(lang, 'profile', 'noHistory')}</p>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

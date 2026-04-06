@@ -20,5 +20,11 @@ service cloud.firestore {
       );
       allow create: if request.auth != null;
     }
+    
+    // Заңдар базасы
+    match /laws/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

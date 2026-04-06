@@ -5,6 +5,8 @@ import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDoc
 import { Send, Bot, User, Loader2, BrainCircuit, Search, Plus, MessageSquare, Info, X, MoreHorizontal, Share, Edit2, Pin, Trash2, Archive, Check, ChevronDown, Copy, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useLangStore } from '../store/langStore';
+import { t } from '../utils/i18n';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.OPENROUTER_MODEL || "qwen/qwen3.6-plus:free";
@@ -40,6 +42,7 @@ interface ChatSession {
 
 export default function Chat() {
   const { user } = useAuthStore();
+  const { lang } = useLangStore();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -61,7 +64,6 @@ export default function Chat() {
   const [dislikedIds, setDislikedIds] = useState<Record<string, boolean>>({});
   const [sharingMessage, setSharingMessage] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const cachedLanguageRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
   // Keep ref in sync
@@ -82,13 +84,6 @@ export default function Chat() {
     }
   }, [urlSessionId]);
 
-  // Cache user language on mount
-  useEffect(() => {
-    if (!user) return;
-    getDoc(doc(db, 'users', user.uid)).then(snap => {
-      cachedLanguageRef.current = snap.exists() ? (snap.data().language || 'kk') : 'kk';
-    }).catch(() => { cachedLanguageRef.current = 'kk'; });
-  }, [user]);
 
   // Fetch all sessions — NO sessionId dependency to avoid re-subscribe loops
   useEffect(() => {
@@ -181,7 +176,7 @@ export default function Chat() {
           "messages": [
             {
               "role": "system",
-              "content": "Generate a very short, concise title (max 4-5 words) in Kazakh for a chat session. Return ONLY the title text."
+              "content": `Generate a very short, concise title (max 4-5 words) in ${lang === 'ru' ? 'Russian' : 'Kazakh'} for a chat session based on the user's first message. Return ONLY the title text without quotes.`
             },
             {
               "role": "user",
@@ -192,7 +187,7 @@ export default function Chat() {
       });
       
       const data = await response.json();
-      const generatedTitle = data.choices?.[0]?.message?.content?.trim();
+      const generatedTitle = data.choices?.[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
       
       if (generatedTitle) {
         await updateDoc(doc(db, 'chat_sessions', sessionIdToUpdate), {
@@ -311,11 +306,8 @@ export default function Chat() {
         content: m.content
       }));
 
-      // Use cached language
-      const userLanguage = cachedLanguageRef.current || 'kk';
-
       const systemInstructionKk = `Сен Қазақстан Республикасының заңнамасы бойынша құқықтық кеңесшісің (ЗаңКеңес AI). 
-Пайдаланушыларға қарапайым және түсінікті тілде жауап бер. МІНДЕТТІ ТҮРДЕ тек қазақ тілінде жауап бер, тіпті сұрақ орыс немесе басқа тілде қойылса да. Қазақ тілінен басқа тілді қолдануға қатаң тыйым салынады.
+Пайдаланушыларға қарапайым және түсінікті тілде жауап бер. МІНДЕТТІ ТҮРДЕ тек қазақ тілінде жауап бер.
 Міндетті түрде нақты бап нөмірлерін және заң атауларын көрсет. 
 
 МАҢЫЗДЫ ТАЛАП: 
@@ -328,7 +320,7 @@ export default function Chat() {
 Жауаптың соңында әрқашан мына ескертуді қос: "*Ескерту: Бұл кеңес кәсіби заңгер кеңесін алмастырмайды.*"`;
 
       const systemInstructionRu = `Вы являетесь юридическим консультантом по законодательству Республики Казахстан (ЗаңКеңес AI).
-Отвечайте пользователям простым и понятным языком. ОБЯЗАТЕЛЬНО отвечайте только на русском языке, даже если вопрос задан на казахском или другом языке. Строго запрещается использовать любой другой язык кроме русского.
+Отвечайте пользователям простым и понятным языком. ОБЯЗАТЕЛЬНО отвечайте только на русском языке.
 Обязательно указывайте конкретные номера статей и названия законов.
 
 ВАЖНОЕ ТРЕБОВАНИЕ:
@@ -340,7 +332,31 @@ export default function Chat() {
 
 В конце ответа всегда добавляйте это предупреждение: "*Предупреждение: Данная консультация не заменяет консультацию профессионального юриста.*"`;
 
-      const systemInstruction = userLanguage === 'ru' ? systemInstructionRu : systemInstructionKk;
+      const systemInstruction = lang === 'ru' ? systemInstructionRu : systemInstructionKk;
+
+      // RAG: Заңдар базасынан мәлімет іздеу (Keyword search)
+      let lawContext = '';
+      try {
+        const lawsSnapshot = await getDocs(collection(db, 'laws'));
+        const matchedLaws: string[] = [];
+        const queryLower = userMessage.toLowerCase();
+        
+        lawsSnapshot.forEach(doc => {
+          const data = doc.data();
+          const tags = data.tags || [];
+          if (tags.some((tag: string) => queryLower.includes(tag.toLowerCase()))) {
+            matchedLaws.push(`- ${data.title} (${data.article}): ${data.content}`);
+          }
+        });
+        
+        if (matchedLaws.length > 0) {
+          lawContext = `\n\nПАЙДАЛАНУҒА МІНДЕТТІ ҚОСЫМША МӘЛІМЕТ (ҚР ЗАҢДАРЫ):\nСіз міндетті түрде төмендегі баптарды негізге ала отырып жауап беруіңіз керек:\n${matchedLaws.join('\n\n')}`;
+        }
+      } catch (err) {
+        console.error('Error fetching laws for RAG:', err);
+      }
+
+      const finalSystemInstruction = systemInstruction + lawContext;
 
       let responseText = '';
       let sources: any[] = [];
@@ -383,7 +399,7 @@ export default function Chat() {
               model: modelsToTry[i],
               stream: true,
               messages: [
-                { role: 'system', content: systemInstruction },
+                { role: 'system', content: finalSystemInstruction },
                 ...history,
                 { role: 'user', content: userMessage }
               ]
