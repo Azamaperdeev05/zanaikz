@@ -4,23 +4,23 @@ import { db } from '../firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, updateDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { Send, Bot, User, Loader2, BrainCircuit, Search, Plus, MessageSquare, Info, X, MoreHorizontal, Share, Edit2, Pin, Trash2, Archive, Check, ChevronDown, Copy, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { Link } from 'react-router-dom';
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { Link, useParams, useNavigate } from 'react-router-dom';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.OPENROUTER_MODEL || "qwen/qwen3.6-plus:free";
 
 const AVAILABLE_MODELS = [
-  { id: "qwen/qwen3.6-plus:free", name: "Qwen 3.6 Plus" },
-  { id: "alibaba/wan-2.6", name: "Alibaba Wan 2.6" },
-  { id: "bytedance/seedance-1-5-pro", name: "Seedance 1.5 Pro" },
-  { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nvidia Nemotron" },
-  { id: "nvidia/llama-nemotron-embed-vl-1b-v2:free", name: "Llama Nemotron" },
-  { id: "minimax/minimax-m2.5:free", name: "MiniMax 2.5" },
-  { id: "sourceful/riverflow-v2-fast", name: "Riverflow v2" },
-  { id: "stepfun/step-3.5-flash:free", name: "StepFun 3.5" },
-  { id: "arcee-ai/trinity-large-preview:free", name: "Trinity Preview" },
-  { id: "z-ai/glm-4.5-air:free", name: "GLM 4.5 Air" },
-  { id: "openai/gpt-oss-120b:free", name: "GPT OSS 120B" }
+  // DeepSeek models (default — own API)
+  { id: "deepseek-chat", name: "DeepSeek V3", provider: "deepseek" },
+  { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "deepseek" },
+  // OpenRouter models (fallback)
+  { id: "qwen/qwen3.6-plus:free", name: "Qwen 3.6 Plus", provider: "openrouter" },
+  { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nvidia Nemotron", provider: "openrouter" },
+  { id: "minimax/minimax-m2.5:free", name: "MiniMax 2.5", provider: "openrouter" },
+  { id: "stepfun/step-3.5-flash:free", name: "StepFun 3.5", provider: "openrouter" },
+  { id: "arcee-ai/trinity-large-preview:free", name: "Trinity Preview", provider: "openrouter" },
+  { id: "z-ai/glm-4.5-air:free", name: "GLM 4.5 Air", provider: "openrouter" },
+  { id: "openai/gpt-oss-120b:free", name: "GPT OSS 120B", provider: "openrouter" }
 ];
 
 interface Message {
@@ -40,19 +40,21 @@ interface ChatSession {
 
 export default function Chat() {
   const { user } = useAuthStore();
+  const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionIdState] = useState<string | null>(urlSessionId || null);
   const [isThinkingMode, setIsThinkingMode] = useState(false);
   const [showModelInfo, setShowModelInfo] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitleBuffer, setEditTitleBuffer] = useState('');
   const [sessionToDelete, setSessionToDelete] = useState<ChatSession | null>(null);
-  const [selectedModel, setSelectedModel] = useState(MODEL);
+  const [selectedModel, setSelectedModel] = useState("deepseek-chat");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
@@ -63,7 +65,22 @@ export default function Chat() {
   const sessionIdRef = useRef<string | null>(null);
 
   // Keep ref in sync
-  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  // Keep ref in sync & update URL
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+    if (sessionId) {
+      navigate(`/chat/${sessionId}`, { replace: true });
+    } else {
+      navigate('/chat', { replace: true });
+    }
+  }, [sessionId]);
+
+  // Sync URL param → state
+  useEffect(() => {
+    if (urlSessionId && urlSessionId !== sessionId) {
+      setSessionIdState(urlSessionId);
+    }
+  }, [urlSessionId]);
 
   // Cache user language on mount
   useEffect(() => {
@@ -98,7 +115,7 @@ export default function Chat() {
       
       // Auto-select first session if none selected
       if (!sessionIdRef.current && fetchedSessions.length > 0) {
-        setSessionId(fetchedSessions[0].id);
+        setSessionIdState(fetchedSessions[0].id);
       }
     });
 
@@ -115,7 +132,7 @@ export default function Chat() {
       created_at: serverTimestamp(),
       updated_at: serverTimestamp()
     });
-    setSessionId(docRef.id);
+    setSessionIdState(docRef.id);
   };
 
   // Listen to messages for the current session
@@ -194,7 +211,7 @@ export default function Chat() {
     // Switch session immediately for instant UX
     if (sessionId === id) {
       const remaining = sessions.filter(s => s.id !== id);
-      setSessionId(remaining.length > 0 ? remaining[0].id : null);
+      setSessionIdState(remaining.length > 0 ? remaining[0].id : null);
     }
 
     // Delete session doc
@@ -265,7 +282,7 @@ export default function Chat() {
         updated_at: serverTimestamp()
       });
       currentSessionId = docRef.id;
-      setSessionId(currentSessionId);
+      setSessionIdState(currentSessionId);
     } else {
       // Update session timestamp in background (don't await)
       updateDoc(doc(db, 'chat_sessions', currentSessionId), {
@@ -334,38 +351,56 @@ export default function Chat() {
         "openrouter/free"
       ];
 
+      const getProviderForModel = (modelId: string) => {
+        const found = AVAILABLE_MODELS.find(m => m.id === modelId);
+        return found?.provider || 'openrouter';
+      };
+
       for (let i = 0; i < modelsToTry.length; i++) {
         try {
-          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-              "HTTP-Referer": window.location.origin,
-              "X-Title": "ZanKenes AI",
-              "Content-Type": "application/json"
-            },
+          const provider = getProviderForModel(modelsToTry[i]);
+          const isDeepSeek = provider === 'deepseek';
+          
+          const apiUrl = isDeepSeek
+            ? 'https://api.deepseek.com/chat/completions'
+            : 'https://openrouter.ai/api/v1/chat/completions';
+          
+          const apiKey = isDeepSeek ? DEEPSEEK_API_KEY : OPENROUTER_API_KEY;
+          
+          const headers: Record<string, string> = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          };
+          if (!isDeepSeek) {
+            headers['HTTP-Referer'] = window.location.origin;
+            headers['X-Title'] = 'ZanKenes AI';
+          }
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers,
             body: JSON.stringify({
-              "model": modelsToTry[i],
-              "stream": true,
-              "messages": [
-                { "role": "system", "content": systemInstruction },
+              model: modelsToTry[i],
+              stream: true,
+              messages: [
+                { role: 'system', content: systemInstruction },
                 ...history,
-                { "role": "user", "content": userMessage }
+                { role: 'user', content: userMessage }
               ]
             })
           });
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`OpenRouter Error (${modelsToTry[i]}): ${errorData.error?.message || response.statusText}`);
+            throw new Error(`${isDeepSeek ? 'DeepSeek' : 'OpenRouter'} Error (${modelsToTry[i]}): ${errorData.error?.message || response.statusText}`);
           }
 
-          if (!response.body) throw new Error("No response body returned from API");
+          if (!response.body) throw new Error('No response body returned from API');
           
           const reader = response.body.getReader();
-          const decoder = new TextDecoder("utf-8");
+          const decoder = new TextDecoder('utf-8');
           let done = false;
-          let fullText = "";
+          let fullText = '';
 
           while (!done) {
             const { value, done: readerDone } = await reader.read();
@@ -394,7 +429,7 @@ export default function Chat() {
         } catch (aiError: any) {
           console.warn(`Fallback triggered. Model ${modelsToTry[i]} failed:`, aiError.message);
           if (i === modelsToTry.length - 1) {
-            console.error("All fallback models exhausted.", aiError);
+            console.error('All fallback models exhausted.', aiError);
             responseText = `Қате пайда болды: ${aiError.message || 'Белгісіз қате'}. Жүйе әкімшісіне хабарласыңыз.`;
           }
         }
@@ -460,7 +495,7 @@ export default function Chat() {
                 </form>
               ) : (
                 <button
-                  onClick={() => setSessionId(session.id)}
+                  onClick={() => setSessionIdState(session.id)}
                   className={`w-full text-left px-3 py-[7px] rounded-lg flex items-center justify-between transition-colors ${
                     sessionId === session.id ? 'bg-[#0071e3]/10 text-[#0071e3]' : 'hover:bg-black/[0.03] text-[#1d1d1f]/70'
                   }`}

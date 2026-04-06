@@ -79,6 +79,7 @@ export default function App() {
         <Route path="/login" element={<RedirectIfAuthenticated><Login /></RedirectIfAuthenticated>} />
         <Route element={<Layout />}>
           <Route path="chat" element={<Chat />} />
+          <Route path="chat/:sessionId" element={<Chat />} />
           <Route path="laws" element={<Laws />} />
           <Route path="lawyers" element={<Lawyers />} />
           <Route path="templates" element={<Templates />} />
