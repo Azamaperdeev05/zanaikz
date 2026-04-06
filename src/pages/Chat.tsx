@@ -483,12 +483,12 @@ export default function Chat() {
       {/* Sidebar for Chat Sessions */}
       <div className="w-[220px] border-r border-black/[0.06] bg-[#f5f5f7]/80 backdrop-blur-xl flex flex-col hidden md:flex">
         <div className="p-3 border-b border-black/[0.04]">
-          <button 
+            <button 
             onClick={createNewSession}
             className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-black/[0.06] rounded-lg text-[13px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Жаңа чат
+            {lang === 'kk' ? 'Жаңа чат' : 'Новый чат'}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -519,7 +519,7 @@ export default function Chat() {
                   <div className="flex items-center gap-2.5 overflow-hidden">
                     <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
                     <div className="truncate text-[13px] font-medium">
-                      {session.title || 'Жаңа чат'}
+                      {session.title || (lang === 'kk' ? 'Жаңа чат' : 'Новый чат')}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -543,20 +543,17 @@ export default function Chat() {
                   <div className="fixed inset-0 z-40" onClick={(e) => {e.stopPropagation(); setMenuOpenId(null);}}></div>
                   <div className="absolute right-2 top-10 w-48 bg-white/95 backdrop-blur-xl text-[#1d1d1f] border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 text-[13px] font-medium">
                     <button onClick={handleShare} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
-                      <Share className="w-3.5 h-3.5 text-[#86868b]" /> Бөлісу
+                      <Share className="w-3.5 h-3.5 text-[#86868b]" /> {lang === 'kk' ? 'Бөлісу' : 'Поделиться'}
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(session.id); setEditTitleBuffer(session.title); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
-                      <Edit2 className="w-3.5 h-3.5 text-[#86868b]" /> Атауын өзгерту
+                      <Edit2 className="w-3.5 h-3.5 text-[#86868b]" /> {lang === 'kk' ? 'Атауын өзгерту' : 'Переименовать'}
                     </button>
                     <button onClick={(e) => handleTogglePin(session, e)} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
-                      <Pin className="w-3.5 h-3.5 text-[#86868b]" /> {session.isPinned ? 'Бекітуді алу' : 'Бекіту'}
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
-                      <Archive className="w-3.5 h-3.5 text-[#86868b]" /> Мұрағаттау
+                      <Pin className="w-3.5 h-3.5 text-[#86868b]" /> {session.isPinned ? (lang === 'kk' ? 'Бекітуді алу' : 'Открепить') : (lang === 'kk' ? 'Бекіту' : 'Закрепить')}
                     </button>
                     <div className="border-t border-black/[0.04] my-1"></div>
                     <button onClick={(e) => { e.stopPropagation(); setSessionToDelete(session); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-[#ff3b30]/[0.06] text-[#ff3b30] flex items-center gap-2.5 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" /> Жою
+                      <Trash2 className="w-3.5 h-3.5" /> {lang === 'kk' ? 'Жою' : 'Удалить'}
                     </button>
                   </div>
                 </>
@@ -573,8 +570,8 @@ export default function Chat() {
           <div className="flex items-center gap-3">
             <button onClick={createNewSession} className="md:hidden p-1.5 text-[#86868b] hover:bg-black/[0.04] rounded-lg"><Plus className="w-5 h-5" /></button>
             <div>
-              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Құқықтық кеңесші</h2>
-              <p className="text-[11px] text-[#86868b]">ҚР заңнамасы бойынша</p>
+              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">{lang === 'kk' ? 'Құқықтық кеңесші' : 'Юридический консультант'}</h2>
+              <p className="text-[11px] text-[#86868b]">{lang === 'kk' ? 'ҚР заңнамасы бойынша' : 'По законодательству РК'}</p>
             </div>
           </div>
           <div className="relative">
@@ -586,46 +583,16 @@ export default function Chat() {
               <span className="hidden sm:inline">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || "AI"}</span>
               <ChevronDown className="w-3 h-3 opacity-50" />
             </button>
-            {showModelDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)}></div>
-                <div className="absolute right-0 top-10 mt-1 w-52 bg-white/95 backdrop-blur-xl border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 max-h-[350px] overflow-y-auto">
-                  <div className="px-3.5 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">AI моделі</div>
-                  {AVAILABLE_MODELS.map((model) => (
-                    <button key={model.id} onClick={() => { setSelectedModel(model.id); setShowModelDropdown(false); }}
-                      className={`w-full text-left px-3.5 py-2 text-[13px] flex items-center justify-between hover:bg-black/[0.04] transition-colors ${selectedModel === model.id ? 'text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70'}`}
-                    >
-                      <span className="truncate pr-2">{model.name}</span>
-                      {selectedModel === model.id && <Check className="w-3.5 h-3.5 text-[#0071e3] flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </div>
-
-        {/* Model Info Modal */}
-        {showModelInfo && (
-          <div className="absolute top-14 left-4 md:left-1/4 z-10 w-72 bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-black/[0.06] p-4">
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="text-[14px] font-semibold text-[#1d1d1f]">AI Модельдері</h3>
-              <button onClick={() => setShowModelInfo(false)} className="text-[#86868b] hover:text-[#1d1d1f]"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-black/[0.04]">
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-[#1d1d1f] mb-1"><BrainCircuit className="w-3.5 h-3.5 text-[#0071e3]" />ZanKenes AI</div>
-              <ul className="text-[12px] text-[#86868b] space-y-0.5 mt-2"><li>• Жоғары жылдамдық</li><li>• ҚР заңнамасын түсінеді</li><li>• 11+ модель, auto-fallback</li></ul>
-            </div>
-          </div>
-        )}
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5">
           {messages.length === 0 && (
             <div className="text-center mt-16">
               <Bot className="w-10 h-10 mx-auto mb-3 text-[#d2d2d7]" />
-              <p className="text-[15px] text-[#1d1d1f] font-medium">Сәлеметсіз бе!</p>
-              <p className="text-[13px] text-[#86868b] mt-1">Заңнамалық сұрағыңызды жазыңыз.</p>
+              <p className="text-[15px] text-[#1d1d1f] font-medium">{lang === 'kk' ? 'Сәлеметсіз бе!' : 'Здравствуйте!'}</p>
+              <p className="text-[13px] text-[#86868b] mt-1">{lang === 'kk' ? 'Заңнамалық сұрағыңызды жазыңыз.' : 'Задайте ваш юридический вопрос.'}</p>
             </div>
           )}
           
@@ -637,19 +604,19 @@ export default function Chat() {
               }`}>
                 {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
-              <div className={`max-w-[80%] rounded-[18px] px-4 py-2.5 ${
+              <div className={`max-w-[80%] rounded-[24px] px-4 py-3 ${
                 msg.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-[4px]' : 
                 msg.role === 'system' ? 'bg-[#ff3b30]/[0.06] text-[#ff3b30] border border-[#ff3b30]/10' : 'bg-[#f5f5f7] text-[#1d1d1f] rounded-bl-[4px]'
               }`}>
                 {msg.role === 'user' ? (
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <p className="whitespace-pre-wrap text-[15px]">{msg.content}</p>
                 ) : (
-                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f]">
+                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f] text-[15px] leading-relaxed">
                     <Markdown
                       components={{
                         a: ({node, href, children, ...props}) => {
                           if (href?.startsWith('/')) {
-                            return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-semibold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
+                            return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-bold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
                           }
                           return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0071e3] hover:underline break-all" {...props}>{children}</a>;
                         }
@@ -660,34 +627,19 @@ export default function Chat() {
                   </div>
                 )}
                 
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Дереккөздер:</p>
-                    <ul className="text-xs text-blue-600 space-y-1">
-                      {msg.sources.map((source, idx) => (
-                        <li key={idx}><a href={source} target="_blank" rel="noreferrer" className="hover:underline truncate block">{source}</a></li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
                 {msg.role === 'assistant' && (
-                  <div className="flex items-center gap-0.5 mt-2 pt-1.5 text-[#86868b]">
-                    <button onClick={() => handleCopy(msg.id, msg.content)} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors" title="Көшіру">
+                  <div className="flex items-center gap-1 mt-3 pt-2 border-t border-black/[0.03] text-[#86868b]">
+                    <button onClick={() => handleCopy(msg.id, msg.content)} className="p-2 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-xl transition-colors">
                       {copiedId === msg.id ? <Check className="w-4 h-4 text-[#34c759]" /> : <Copy className="w-4 h-4" />}
                     </button>
-                    <button onClick={() => toggleLike(msg.id)} className={`p-1.5 hover:bg-black/[0.04] rounded-lg transition-colors ${likedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`} title="Ұнады">
+                    <button onClick={() => toggleLike(msg.id)} className={`p-2 hover:bg-black/[0.04] rounded-xl transition-colors ${likedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`}>
                       <ThumbsUp className="w-4 h-4" fill={likedIds[msg.id] ? "currentColor" : "none"} />
                     </button>
-                    <button onClick={() => toggleDislike(msg.id)} className={`p-1.5 hover:bg-black/[0.04] rounded-lg transition-colors ${dislikedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`} title="Ұнамады">
+                    <button onClick={() => toggleDislike(msg.id)} className={`p-2 hover:bg-black/[0.04] rounded-xl transition-colors ${dislikedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`}>
                       <ThumbsDown className="w-4 h-4" fill={dislikedIds[msg.id] ? "currentColor" : "none"} />
                     </button>
-                    <button onClick={() => setSharingMessage(msg)} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors" title="Бөлісу">
+                    <button onClick={() => setSharingMessage(msg)} className="p-2 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-xl transition-colors">
                       <Share className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => { const t = messages[messages.length-1].role === 'user' ? messages[messages.length-1].content : messages[messages.length-2]?.content || ''; setInput(t); }} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors group relative">
-                      <RefreshCw className="w-4 h-4" />
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-[#1d1d1f] text-white text-[11px] whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Қайталау</div>
                     </button>
                   </div>
                 )}
@@ -699,13 +651,13 @@ export default function Chat() {
               <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center">
                 <Bot className="w-4 h-4" />
               </div>
-              <div className={`max-w-[80%] rounded-[18px] ${streamingResponse ? 'px-4 py-2.5 bg-[#f5f5f7] rounded-bl-[4px] text-[#1d1d1f]' : 'bg-[#f5f5f7] rounded-bl-[4px] px-4 py-3 flex items-center gap-2 text-[#86868b] text-[14px]'}`}>
+              <div className={`max-w-[80%] rounded-[24px] ${streamingResponse ? 'px-4 py-3 bg-[#f5f5f7] rounded-bl-[4px] text-[#1d1d1f]' : 'bg-[#f5f5f7] rounded-bl-[4px] px-4 py-3 flex items-center gap-2 text-[#86868b] text-[14px]'}`}>
                 {streamingResponse ? (
-                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f]">
+                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f] text-[15px] leading-relaxed">
                     <Markdown
                       components={{
                         a: ({node, href, children, ...props}) => {
-                          if (href?.startsWith('/')) return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-semibold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
+                          if (href?.startsWith('/')) return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-bold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
                           return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0071e3] hover:underline break-all" {...props}>{children}</a>;
                         }
                       }}
@@ -716,84 +668,36 @@ export default function Chat() {
                 ) : (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>{isThinkingMode ? 'Талдау…' : 'Жазуда…'}</span>
+                    <span>{lang === 'kk' ? 'Мәлімет талдау…' : 'Анализ данных…'}</span>
                   </>
                 )}
               </div>
             </div>
           )}
-          {sharingMessage && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-[#1C1C1E] rounded-3xl w-full max-w-md overflow-hidden shadow-2xl relative border border-gray-800 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between p-5 border-b border-gray-800/50">
-                  <h2 className="text-xl font-bold text-white">Бөлісу</h2>
-                  <button 
-                    onClick={() => setSharingMessage(null)}
-                    className="text-gray-400 hover:text-white transition-colors p-1"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="p-6">
-                  <div className="bg-[#2C2C2E] rounded-xl p-5 mb-6 select-none relative shadow-inner">
-                     <p className="text-gray-300 text-sm line-clamp-4 leading-relaxed">{sharingMessage.content}</p>
-                     <div className="absolute right-3 bottom-0 translate-y-1/2 bg-[#1C1C1E] px-3 py-1 rounded-full border border-gray-700 shadow-md">
-                        <span className="text-white text-xs font-bold flex items-center gap-1">
-                          <BrainCircuit className="w-3 h-3 text-[#2E86C1]" /> ЗаңКеңес AI
-                        </span>
-                     </div>
-                  </div>
-
-                  <div className="flex justify-center gap-5 sm:gap-6">
-                    <button onClick={() => { handleCopy(sharingMessage.id, sharingMessage.content); setSharingMessage(null); }} className="flex flex-col items-center gap-2 group">
-                      <div className="w-14 h-14 rounded-full bg-[#007AFF] flex items-center justify-center text-white group-hover:scale-105 transition-all shadow-lg">
-                         <Copy className="w-6 h-6" />
-                      </div>
-                      <span className="text-xs text-gray-400 font-medium">Көшіру</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-2 group">
-                      <div className="w-14 h-14 rounded-full bg-black border border-gray-700 flex items-center justify-center text-white group-hover:scale-105 transition-all shadow-lg">
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                      </div>
-                      <span className="text-xs text-gray-400 font-medium">X</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-2 group">
-                      <div className="w-14 h-14 rounded-full bg-[#0A66C2] flex items-center justify-center text-white group-hover:scale-105 transition-all shadow-lg">
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                      </div>
-                      <span className="text-xs text-gray-400 font-medium">LinkedIn</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
-        <div className="p-3 bg-white/80 backdrop-blur-xl border-t border-black/[0.06]">
-          <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
+        <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-black/[0.06] md:pb-24">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative group">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Сұрағыңызды жазыңыз…"
-              className="w-full pl-4 pr-12 py-2.5 bg-[#f5f5f7] border border-black/[0.06] rounded-full text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 transition-all"
+              placeholder={lang === 'kk' ? 'Сұрағыңызды жазыңыз…' : 'Введите ваш вопрос…'}
+              className="w-full pl-6 pr-14 py-4 bg-[#f5f5f7] border border-transparent rounded-[24px] text-[16px] text-[#1d1d1f] shadow-sm transition-all focus:bg-white focus:border-[#0071e3]/20 focus:ring-4 focus:ring-[#0071e3]/5"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 bg-[#0071e3] text-white rounded-full hover:bg-[#0077ED] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-[#0071e3] text-white rounded-2xl hover:bg-[#0077ED] hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#0071e3]/20"
             >
-              <Send className="w-3.5 h-3.5" />
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
           </form>
-          <p className="text-center text-[11px] text-[#86868b] mt-2">
-            AI қателіктер жіберуі мүмкін.
+          <p className="text-center text-[11px] text-[#86868b] mt-3 font-medium">
+             © 2026 ЗаңКеңес AI. {lang === 'kk' ? 'ЖИ қателіктер жіберуі мүмкін.' : 'ИИ может совершать ошибки.'}
           </p>
         </div>
       </div>
