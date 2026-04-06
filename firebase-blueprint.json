@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "full_name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user", "moderator"] },
+        "language": { "type": "string", "enum": ["kk", "ru"] },
+        "region": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_login": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "created_at"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A chat session between a user and the AI",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "created_at", "updated_at"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single message in a chat session",
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+        "content": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "object" } },
+        "confidence_score": { "type": "number" },
+        "feedback": { "type": "string", "enum": ["positive", "negative", "null"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["session_id", "role", "content", "created_at"]
+    },
+    "LegalDocument": {
+      "title": "LegalDocument",
+      "description": "A legal document or act",
+      "type": "object",
+      "properties": {
+        "title_kk": { "type": "string" },
+        "title_ru": { "type": "string" },
+        "doc_type": { "type": "string" },
+        "category": { "type": "string" },
+        "adilet_url": { "type": "string" }
+      },
+      "required": ["title_kk", "title_ru"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/chat_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Chat sessions"
+    },
+    "/chat_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Chat messages"
+    },
+    "/legal_documents/{documentId}": {
+      "schema": { "$ref": "#/entities/LegalDocument" },
+      "description": "Legal documents"
+    }
+  }
+}
