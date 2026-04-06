@@ -123,33 +123,32 @@ export default function Calculators() {
     switch (activeTab) {
       case 'alimony':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-gray-100">
-              <div className="w-12 h-12 bg-pink-50 rounded-xl flex items-center justify-center text-pink-600"><Baby className="w-6 h-6" /></div>
+          <div className="bg-white p-6 md:p-8 rounded-2xl border border-black/[0.04]">
+            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
+              <div className="w-10 h-10 bg-[#ff2d55]/[0.08] rounded-xl flex items-center justify-center"><Baby className="w-5 h-5 text-[#ff2d55]" /></div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Алимент есептегіш</h2>
-                <p className="text-sm text-gray-500">ҚР «Неке және отбасы» кодексі (139-бап)</p>
+                <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Алимент есептегіш</h2>
+                <p className="text-[12px] text-[#86868b]">ҚР «Неке және отбасы» кодексі (139-бап)</p>
               </div>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Таза айлық табысыңыз (теңгемен)</label>
-                <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="Мысалы: 250000" className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-[#2E86C1] focus:border-[#2E86C1] transition-all outline-none text-lg" />
+                <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Таза айлық табыс</label>
+                <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="250000" className="w-full px-4 py-2.5 rounded-xl border border-black/[0.06] text-[15px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 transition-all" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Алимент төленетін балалар саны</label>
-                <div className="flex bg-gray-100 p-1 rounded-xl">
+                <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Балалар саны</label>
+                <div className="flex bg-[#f5f5f7] p-1 rounded-xl border border-black/[0.04]">
                   {[1, 2, 3].map((num) => (
-                    <button key={num} onClick={() => setChildrenCount(num)} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${childrenCount === num ? 'bg-white shadow text-[#2E86C1]' : 'text-gray-500'}`}>
-                      {num === 3 ? '3 немесе одан көп' : `${num} бала`}
+                    <button key={num} onClick={() => setChildrenCount(num)} className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${childrenCount === num ? 'bg-white shadow-sm text-[#1d1d1f]' : 'text-[#86868b]'}`}>
+                      {num === 3 ? '3+' : `${num} бала`}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 mt-8 relative overflow-hidden">
-                <CalcIcon className="absolute top-0 right-0 p-4 opacity-10 w-24 h-24 text-[#2E86C1]" />
-                <h3 className="text-sm font-medium text-blue-800 mb-1 relative z-10">Ай сайынғы алимент мөлшері:</h3>
-                <p className="text-4xl font-bold text-[#1A5276] relative z-10">{formatCurrency(calculateAlimony())}</p>
+              <div className="bg-[#f5f5f7] p-5 rounded-xl border border-black/[0.04] mt-6">
+                <h3 className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">Ай сайынғы алимент:</h3>
+                <p className="text-[32px] font-bold text-[#1d1d1f] tracking-tight">{formatCurrency(calculateAlimony())}</p>
               </div>
             </div>
           </div>
@@ -484,25 +483,25 @@ export default function Calculators() {
   };
 
   const navItems = [
-    { id: 'tax', name: 'Жалақыдан салық (Netto)', icon: Receipt, color: 'text-red-500' },
-    { id: 'alimony', name: 'Алимент есептегіш', icon: Baby, color: 'text-pink-500' },
-    { id: 'maternity', name: 'Декреттік төлем', icon: HeartPulse, color: 'text-pink-500' },
-    { id: 'pdd', name: 'ПДД Айыппұл', icon: ShieldAlert, color: 'text-orange-500' },
-    { id: 'penalty', name: 'Өсімпұл (Пеня)', icon: Clock, color: 'text-red-500' },
-    { id: 'loan', name: 'Несие / Ипотека', icon: CreditCard, color: 'text-purple-500' },
-    { id: 'carTax', name: 'Көлік салығы', icon: Car, color: 'text-blue-500' },
-    { id: 'mrp', name: 'АЕК (МРП)', icon: Calculator, color: 'text-amber-500' },
-    { id: 'duty', name: 'Мемлекеттік баж', icon: Scale, color: 'text-green-500' },
-    { id: 'severance', name: 'Жұмыстан шығу өтемақысы', icon: Briefcase, color: 'text-indigo-500' },
+    { id: 'tax', name: 'Жалақыдан салық', icon: Receipt, color: 'text-[#ff3b30]' },
+    { id: 'alimony', name: 'Алимент', icon: Baby, color: 'text-[#ff2d55]' },
+    { id: 'maternity', name: 'Декреттік төлем', icon: HeartPulse, color: 'text-[#ff2d55]' },
+    { id: 'pdd', name: 'ПДД Айыппұл', icon: ShieldAlert, color: 'text-[#ff9500]' },
+    { id: 'penalty', name: 'Өсімпұл', icon: Clock, color: 'text-[#ff3b30]' },
+    { id: 'loan', name: 'Несие', icon: CreditCard, color: 'text-[#af52de]' },
+    { id: 'carTax', name: 'Көлік салығы', icon: Car, color: 'text-[#0071e3]' },
+    { id: 'mrp', name: 'АЕК (МРП)', icon: Calculator, color: 'text-[#ff9500]' },
+    { id: 'duty', name: 'Мем. баж', icon: Scale, color: 'text-[#34c759]' },
+    { id: 'severance', name: 'Жұм. өтемақы', icon: Briefcase, color: 'text-[#5856d6]' },
   ] as const;
 
   return (
-    <div className="p-4 lg:p-6 max-w-7xl mx-auto h-full flex flex-col lg:flex-row gap-4 lg:gap-8 overflow-hidden">
+    <div className="p-4 lg:p-8 max-w-7xl mx-auto h-full flex flex-col lg:flex-row gap-4 lg:gap-8 overflow-hidden">
       
       {/* Mobile Top Navigation */}
       <div className="lg:hidden shrink-0">
-        <h1 className="text-xl font-bold text-gray-900 mb-3 px-1">Калькуляторлар</h1>
-        <div className="flex gap-2 overflow-x-auto pb-3 px-1 scrollbar-hide snap-x">
+        <h1 className="text-[20px] font-bold text-[#1d1d1f] tracking-tight mb-3">Калькуляторлар</h1>
+        <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide snap-x">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -510,14 +509,14 @@ export default function Calculators() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`snap-start shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full transition-all border ${
+                className={`snap-start shrink-0 flex items-center gap-2 px-3.5 py-[6px] rounded-full transition-all border text-[13px] font-medium ${
                   isActive 
-                    ? 'bg-[#1A5276] border-[#1A5276] text-white shadow-md' 
-                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-[#1d1d1f] border-[#1d1d1f] text-white' 
+                    : 'bg-white border-black/[0.06] text-[#1d1d1f]/70 hover:bg-[#f5f5f7]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.color}`} />
-                <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : item.color}`} />
+                <span className="whitespace-nowrap">{item.name}</span>
               </button>
             );
           })}
@@ -525,9 +524,9 @@ export default function Calculators() {
       </div>
 
       {/* Desktop Sidebar Navigation */}
-      <div className="hidden lg:flex w-80 shrink-0 flex-col h-full overflow-hidden">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4 shrink-0">Құқықтық калькуляторлар</h1>
-        <div className="space-y-1 overflow-y-auto pr-3 pb-10 scrollbar-hide">
+      <div className="hidden lg:flex w-64 shrink-0 flex-col h-full overflow-hidden">
+        <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-5 shrink-0">Калькуляторлар</h1>
+        <div className="space-y-0.5 overflow-y-auto pr-3 pb-10 scrollbar-hide">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -535,15 +534,12 @@ export default function Calculators() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group border ${
-                  isActive ? 'bg-blue-50 border-blue-200 shadow-sm' : 'hover:bg-gray-50 border-transparent'
+                className={`w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg transition-all text-left text-[13px] ${
+                  isActive ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70 hover:bg-black/[0.03]'
                 }`}
               >
-                <div className={`p-1.5 rounded-lg ${isActive ? 'bg-white shadow-sm' : 'bg-gray-100 group-hover:bg-white'} transition-colors`}>
-                  <Icon className={`w-4 h-4 ${item.color}`} />
-                </div>
-                <span className={`font-medium text-sm flex-1 ${isActive ? 'text-[#1A5276] font-bold' : 'text-gray-700'}`}>{item.name}</span>
-                {isActive && <ChevronRight className="w-4 h-4 text-[#2E86C1]" />}
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-[#0071e3]' : item.color}`} />
+                <span className="flex-1">{item.name}</span>
               </button>
             );
           })}

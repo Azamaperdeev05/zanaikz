@@ -1,5 +1,13 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword as firebaseSignInWithEmail,
+  updateProfile
+} from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -22,9 +30,7 @@ export const signInWithGoogle = async () => {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    // If popup is blocked by COOP, try opening in same window
     if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-      // Fallback: use signInWithRedirect
       const { signInWithRedirect } = await import('firebase/auth');
       await signInWithRedirect(auth, googleProvider);
       return null;
@@ -32,6 +38,17 @@ export const signInWithGoogle = async () => {
     console.error("Error signing in with Google", error);
     throw error;
   }
+};
+
+export const registerWithEmail = async (email: string, password: string, fullName: string) => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(result.user, { displayName: fullName });
+  return result.user;
+};
+
+export const signInWithEmail = async (email: string, password: string) => {
+  const result = await firebaseSignInWithEmail(auth, email, password);
+  return result.user;
 };
 
 export const logOut = async () => {

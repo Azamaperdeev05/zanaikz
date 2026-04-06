@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -9,6 +9,7 @@ import Templates from './pages/Templates';
 import Calculators from './pages/Calculators';
 import SOS from './pages/SOS';
 import Profile from './pages/Profile';
+import { useAuthStore } from './store/authStore';
 
 import { useEffect } from 'react';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
@@ -19,7 +20,6 @@ function AuthObserver() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Handle redirect result (when signInWithRedirect was used as fallback)
     getRedirectResult(auth).then(async (result) => {
       if (result?.user) {
         await ensureUserProfile(result.user);
@@ -29,7 +29,6 @@ function AuthObserver() {
       console.error("Redirect result error:", error);
     });
 
-    // Listen for auth state changes
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
         await ensureUserProfile(user);
@@ -38,6 +37,14 @@ function AuthObserver() {
   }, []);
 
   return null;
+}
+
+// Redirect authenticated users away from login page
+function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuthStore();
+  if (loading) return null;
+  if (user) return <Navigate to="/chat" replace />;
+  return <>{children}</>;
 }
 
 async function ensureUserProfile(user: any) {
@@ -69,7 +76,7 @@ export default function App() {
       <AuthObserver />
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<RedirectIfAuthenticated><Login /></RedirectIfAuthenticated>} />
         <Route element={<Layout />}>
           <Route path="chat" element={<Chat />} />
           <Route path="laws" element={<Laws />} />

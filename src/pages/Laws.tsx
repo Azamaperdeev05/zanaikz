@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Book, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Book, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { useAuthStore } from '../store/authStore';
@@ -41,7 +41,6 @@ export default function Laws() {
 
   useEffect(() => {
     if (!user) return;
-
     const fetchDocuments = async () => {
       setLoading(true);
       try {
@@ -59,21 +58,13 @@ export default function Laws() {
         setLoading(false);
       }
     };
-
     fetchDocuments();
   }, [user]);
 
   useEffect(() => {
     let result = documents;
-
-    if (selectedCategory) {
-      result = result.filter(doc => doc.category === selectedCategory);
-    }
-
-    if (selectedDocType) {
-      result = result.filter(doc => doc.doc_type === selectedDocType);
-    }
-
+    if (selectedCategory) result = result.filter(doc => doc.category === selectedCategory);
+    if (selectedDocType) result = result.filter(doc => doc.doc_type === selectedDocType);
     if (searchQuery.trim()) {
       const queryStr = searchQuery.toLowerCase();
       result = result.filter(doc => 
@@ -81,77 +72,71 @@ export default function Laws() {
         (doc.title_ru && doc.title_ru.toLowerCase().includes(queryStr))
       );
     }
-
     setFilteredDocs(result);
     setCurrentPage(1);
   }, [searchQuery, selectedCategory, selectedDocType, documents]);
 
-  // Pagination
   const totalPages = Math.ceil(filteredDocs.length / itemsPerPage);
-  const paginatedDocs = filteredDocs.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedDocs = filteredDocs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50">
+      <div className="flex items-center justify-center h-full bg-[#f5f5f7]">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Заңнамаларды көру үшін жүйеге кіріңіз</h2>
-          <a href="/login" className="px-6 py-2 bg-[#1A5276] text-white rounded-md hover:bg-[#154360]">Кіру</a>
+          <h2 className="text-[20px] font-bold text-[#1d1d1f] mb-3">Заңнамаларды көру үшін кіріңіз</h2>
+          <a href="/login" className="text-[14px] font-medium text-white bg-[#0071e3] px-5 py-2 rounded-full hover:bg-[#0077ED] transition-colors">Кіру</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto h-full overflow-y-auto">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Заңнамалар базасы</h1>
-      </div>
+    <div className="p-5 lg:p-8 max-w-6xl mx-auto h-full overflow-y-auto">
+      <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-1">Заңнамалар базасы</h1>
+      <p className="text-[14px] text-[#86868b] mb-8">ҚР заңнамалық актілерін іздеу және қарау</p>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
+      {/* Search */}
+      <div className="flex flex-col md:flex-row gap-3 mb-8">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868b] w-4 h-4" />
           <input 
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Заңдарды, кодекстерді немесе баптарды іздеу..." 
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2E86C1] focus:border-transparent"
+            placeholder="Іздеу…" 
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 focus:border-[#0071e3]/40 transition-all"
           />
         </div>
-        <div className="flex gap-2">
-          <select 
-            value={selectedDocType || ''} 
-            onChange={(e) => setSelectedDocType(e.target.value || null)}
-            className="px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#2E86C1] focus:border-transparent"
-          >
-            <option value="">Барлық құжат түрлері</option>
-            {docTypes.map(type => (
-              <option key={type.value} value={type.value}>{type.label}</option>
-            ))}
-          </select>
-        </div>
+        <select 
+          value={selectedDocType || ''} 
+          onChange={(e) => setSelectedDocType(e.target.value || null)}
+          className="px-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30"
+        >
+          <option value="">Барлық түрлері</option>
+          {docTypes.map(type => (
+            <option key={type.value} value={type.value}>{type.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="grid md:grid-cols-4 gap-6">
-        <div className="md:col-span-1 space-y-2">
-          <h3 className="font-semibold text-gray-900 mb-4">Санаттар</h3>
+        {/* Categories */}
+        <div className="md:col-span-1 space-y-0.5">
+          <h3 className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-3 px-3">Санаттар</h3>
           <button 
             onClick={() => setSelectedCategory(null)}
-            className={`block w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-              selectedCategory === null ? 'bg-[#EBF5FB] text-[#1A5276] font-medium' : 'hover:bg-gray-100 text-gray-700'
+            className={`block w-full text-left px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
+              selectedCategory === null ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70 hover:bg-black/[0.03]'
             }`}
           >
-            Барлық санаттар
+            Барлығы
           </button>
           {categories.map((cat, idx) => (
             <button 
               key={idx} 
               onClick={() => setSelectedCategory(cat)}
-              className={`block w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                selectedCategory === cat ? 'bg-[#EBF5FB] text-[#1A5276] font-medium' : 'hover:bg-gray-100 text-gray-700'
+              className={`block w-full text-left px-3 py-[7px] rounded-lg text-[13px] transition-colors ${
+                selectedCategory === cat ? 'bg-[#0071e3]/10 text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70 hover:bg-black/[0.03]'
               }`}
             >
               {cat}
@@ -159,74 +144,58 @@ export default function Laws() {
           ))}
         </div>
         
-        <div className="md:col-span-3 space-y-4">
+        {/* Documents */}
+        <div className="md:col-span-3 space-y-3">
           {loading ? (
-            <div className="text-center py-10 text-gray-500">Жүктелуде...</div>
+            <div className="text-center py-16 text-[#86868b] text-[14px]">Жүктелуде…</div>
           ) : paginatedDocs.length > 0 ? (
             <>
               {paginatedDocs.map((doc) => (
-                <div key={doc.id} className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <Book className="w-6 h-6 text-[#2E86C1] mt-1 flex-shrink-0" />
-                      <div>
-                        <h3 className="text-lg font-medium text-[#1A5276]">
-                          {doc.title_kk || doc.title_ru}
-                        </h3>
-                        {doc.title_kk && doc.title_ru && (
-                          <p className="text-sm text-gray-600 mt-1">{doc.title_ru}</p>
-                        )}
-                        <div className="flex gap-2 mt-2">
-                          {doc.category && (
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-                              {doc.category}
-                            </span>
-                          )}
-                          {doc.doc_type && (
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded">
-                              {docTypes.find(t => t.value === doc.doc_type)?.label || doc.doc_type}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                <div key={doc.id} className="bg-white p-5 rounded-2xl border border-black/[0.04] hover:border-black/[0.08] transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 bg-[#0071e3]/[0.08] rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Book className="w-4 h-4 text-[#0071e3]" />
                     </div>
-                  </div>
-                  <div className="mt-4 flex gap-3">
-                    {doc.adilet_url && (
-                      <a href={doc.adilet_url} target="_blank" rel="noreferrer" className="text-sm text-[#2E86C1] hover:underline">
-                        Толық мәтін (adilet.zan.kz)
-                      </a>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-semibold text-[#1d1d1f] leading-snug">{doc.title_kk || doc.title_ru}</h3>
+                      {doc.title_kk && doc.title_ru && (
+                        <p className="text-[13px] text-[#86868b] mt-1">{doc.title_ru}</p>
+                      )}
+                      <div className="flex gap-2 mt-2.5">
+                        {doc.category && (
+                          <span className="px-2.5 py-0.5 bg-[#f5f5f7] text-[#86868b] text-[11px] font-medium rounded-full">{doc.category}</span>
+                        )}
+                        {doc.doc_type && (
+                          <span className="px-2.5 py-0.5 bg-[#0071e3]/[0.06] text-[#0071e3] text-[11px] font-medium rounded-full">
+                            {docTypes.find(t => t.value === doc.doc_type)?.label || doc.doc_type}
+                          </span>
+                        )}
+                      </div>
+                      {doc.adilet_url && (
+                        <a href={doc.adilet_url} target="_blank" rel="noreferrer" className="inline-block mt-3 text-[13px] text-[#0071e3] hover:underline">
+                          Толық мәтін →
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
               
-              {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-8">
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-2 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 bg-white border border-black/[0.06] rounded-lg disabled:opacity-30 hover:bg-[#f5f5f7] transition-colors">
+                    <ChevronLeft className="w-4 h-4 text-[#1d1d1f]" />
                   </button>
-                  <span className="text-sm text-gray-600">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-2 border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50"
-                  >
-                    <ChevronRight className="w-5 h-5" />
+                  <span className="text-[13px] text-[#86868b] font-medium">{currentPage} / {totalPages}</span>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 bg-white border border-black/[0.06] rounded-lg disabled:opacity-30 hover:bg-[#f5f5f7] transition-colors">
+                    <ChevronRight className="w-4 h-4 text-[#1d1d1f]" />
                   </button>
                 </div>
               )}
             </>
           ) : (
-            <div className="text-center py-10 text-gray-500 bg-white rounded-lg border border-gray-200">
-              Сұраныс бойынша құжаттар табылмады.
+            <div className="text-center py-16 text-[#86868b] text-[14px] bg-white rounded-2xl border border-black/[0.04]">
+              Құжаттар табылмады.
             </div>
           )}
         </div>

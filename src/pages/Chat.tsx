@@ -59,8 +59,21 @@ export default function Chat() {
   const [dislikedIds, setDislikedIds] = useState<Record<string, boolean>>({});
   const [sharingMessage, setSharingMessage] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const cachedLanguageRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
-  // Fetch all sessions
+  // Keep ref in sync
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+  // Cache user language on mount
+  useEffect(() => {
+    if (!user) return;
+    getDoc(doc(db, 'users', user.uid)).then(snap => {
+      cachedLanguageRef.current = snap.exists() ? (snap.data().language || 'kk') : 'kk';
+    }).catch(() => { cachedLanguageRef.current = 'kk'; });
+  }, [user]);
+
+  // Fetch all sessions — NO sessionId dependency to avoid re-subscribe loops
   useEffect(() => {
     if (!user) return;
 
@@ -72,26 +85,25 @@ export default function Chat() {
         fetchedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
       });
       
-      // Sort pinned chats to the top
       fetchedSessions.sort((a, b) => {
         if (a.isPinned === b.isPinned) {
           const aDate = a.updated_at?.toMillis() || 0;
           const bDate = b.updated_at?.toMillis() || 0;
-          return bDate - aDate; // Descending
+          return bDate - aDate;
         }
         return a.isPinned ? -1 : 1;
       });
       
       setSessions(fetchedSessions);
       
-      // If no session is selected and we have sessions, select the first one
-      if (!sessionId && fetchedSessions.length > 0) {
+      // Auto-select first session if none selected
+      if (!sessionIdRef.current && fetchedSessions.length > 0) {
         setSessionId(fetchedSessions[0].id);
       }
     });
 
     return () => unsubscribe();
-  }, [user, sessionId]);
+  }, [user]);
 
   const createNewSession = async () => {
     if (!user) return;
@@ -134,7 +146,7 @@ export default function Chat() {
   }, [sessionId]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
   const generateAndSaveTitle = async (sessionIdToUpdate: string, firstMessage: string) => {
@@ -177,9 +189,22 @@ export default function Chat() {
   };
 
   const confirmDeleteSession = async (id: string) => {
-    await deleteDoc(doc(db, 'chat_sessions', id));
-    if (sessionId === id) setSessionId(null);
     setSessionToDelete(null);
+    
+    // Switch session immediately for instant UX
+    if (sessionId === id) {
+      const remaining = sessions.filter(s => s.id !== id);
+      setSessionId(remaining.length > 0 ? remaining[0].id : null);
+    }
+
+    // Delete session doc
+    deleteDoc(doc(db, 'chat_sessions', id));
+
+    // Delete all messages for this session in background
+    getDocs(query(collection(db, 'chat_messages'), where('session_id', '==', id)))
+      .then(snapshot => {
+        snapshot.forEach(d => deleteDoc(d.ref));
+      });
   };
 
   const handleCopy = (id: string, content: string) => {
@@ -220,16 +245,20 @@ export default function Chat() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !user) return;
+    if (!input.trim() || !user || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setIsLoading(true);
 
     let currentSessionId = sessionId;
     const isFirstMessage = messages.length === 0;
 
-    // If no session exists at all, create one first
+    // Create session if needed (fire-and-forget where possible)
     if (!currentSessionId) {
       const docRef = await addDoc(collection(db, 'chat_sessions'), {
         user_id: user.uid,
-        title: input.trim().substring(0, 30) + '...',
+        title: userMessage.substring(0, 30) + '...',
         category: 'general',
         is_encrypted: true,
         created_at: serverTimestamp(),
@@ -238,58 +267,36 @@ export default function Chat() {
       currentSessionId = docRef.id;
       setSessionId(currentSessionId);
     } else {
-      // Update session title if it's the first message
-      if (isFirstMessage) {
-        await updateDoc(doc(db, 'chat_sessions', currentSessionId), {
-          title: input.trim().substring(0, 30) + '...',
-          updated_at: serverTimestamp()
-        });
-      } else {
-        // Just update timestamp
-        await updateDoc(doc(db, 'chat_sessions', currentSessionId), {
-          updated_at: serverTimestamp()
-        });
-      }
+      // Update session timestamp in background (don't await)
+      updateDoc(doc(db, 'chat_sessions', currentSessionId), {
+        ...(isFirstMessage ? { title: userMessage.substring(0, 30) + '...' } : {}),
+        updated_at: serverTimestamp()
+      });
     }
 
-    const userMessage = input.trim();
-    setInput('');
-    setIsLoading(true);
-
-    // Generate descriptive title in the background if it's the first message
+    // Generate title in the background (don't await)
     if (isFirstMessage) {
       generateAndSaveTitle(currentSessionId, userMessage);
     }
 
     try {
-      // Save user message
-      await addDoc(collection(db, 'chat_messages'), {
+      // Save user message (don't await — Firestore listener picks it up)
+      addDoc(collection(db, 'chat_messages'), {
         session_id: currentSessionId,
         role: 'user',
         content: userMessage,
         created_at: serverTimestamp()
       });
 
-      // Prepare history for OpenRouter
+      // Prepare history
       const history = messages.map(m => ({
         role: m.role,
         content: m.content
       }));
 
-      // Get user language preference
-      let userLanguage = 'kk'; // Default
-      if (user) {
-        try {
-          const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-          if (userDocSnap.exists() && userDocSnap.data().language) {
-            userLanguage = userDocSnap.data().language;
-          }
-        } catch (e) {
-          console.error("Failed to fetch user language", e);
-        }
-      }
+      // Use cached language
+      const userLanguage = cachedLanguageRef.current || 'kk';
 
-      // System instruction mapped by language
       const systemInstructionKk = `Сен Қазақстан Республикасының заңнамасы бойынша құқықтық кеңесшісің (ЗаңКеңес AI). 
 Пайдаланушыларға қарапайым және түсінікті тілде жауап бер. МІНДЕТТІ ТҮРДЕ тек қазақ тілінде жауап бер, тіпті сұрақ орыс немесе басқа тілде қойылса да. Қазақ тілінен басқа тілді қолдануға қатаң тыйым салынады.
 Міндетті түрде нақты бап нөмірлерін және заң атауларын көрсет. 
@@ -319,13 +326,12 @@ export default function Chat() {
       const systemInstruction = userLanguage === 'ru' ? systemInstructionRu : systemInstructionKk;
 
       let responseText = '';
-      let sources = [];
+      let sources: any[] = [];
       
-      // Fallback mechanism to ensure chat never fails due to 429/Provider errors
       const modelsToTry = [
         selectedModel,
         ...AVAILABLE_MODELS.map(m => m.id).filter(id => id !== selectedModel),
-        "openrouter/free" // Last resort auto-router
+        "openrouter/free"
       ];
 
       for (let i = 0; i < modelsToTry.length; i++) {
@@ -376,20 +382,17 @@ export default function Chat() {
                     const content = parsed.choices?.[0]?.delta?.content || '';
                     fullText += content;
                     setStreamingResponse(fullText);
-                  } catch (e) {
-                    // Ignore JSON parsing errors for incomplete stream chunks
-                  }
+                  } catch (e) {}
                 }
               }
             }
           }
           
           responseText = fullText;
-          break; // Success! Exit the loop
+          break;
           
         } catch (aiError: any) {
           console.warn(`Fallback triggered. Model ${modelsToTry[i]} failed:`, aiError.message);
-          // If this is the last model in the fallback array, show the error to user
           if (i === modelsToTry.length - 1) {
             console.error("All fallback models exhausted.", aiError);
             responseText = `Қате пайда болды: ${aiError.message || 'Белгісіз қате'}. Жүйе әкімшісіне хабарласыңыз.`;
@@ -403,14 +406,14 @@ export default function Chat() {
         role: 'assistant',
         content: responseText,
         sources: sources,
-        confidence_score: 0.95, // Mocked for now
+        confidence_score: 0.95,
         created_at: serverTimestamp()
       });
       setStreamingResponse('');
 
     } catch (error) {
       console.error("Error generating response:", error);
-      await addDoc(collection(db, 'chat_messages'), {
+      addDoc(collection(db, 'chat_messages'), {
         session_id: currentSessionId,
         role: 'system',
         content: 'Қате пайда болды. Қайтадан байқап көріңіз.',
@@ -423,71 +426,61 @@ export default function Chat() {
     }
   };
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-full bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Чатты пайдалану үшін жүйеге кіріңіз</h2>
-          <a href="/login" className="px-6 py-2 bg-[#1A5276] text-white rounded-md hover:bg-[#154360]">Кіру</a>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full bg-white">
       {/* Sidebar for Chat Sessions */}
-      <div className="w-64 border-r border-gray-200 bg-gray-50 flex flex-col hidden md:flex">
-        <div className="p-4 border-b border-gray-200">
+      <div className="w-[220px] border-r border-black/[0.06] bg-[#f5f5f7]/80 backdrop-blur-xl flex flex-col hidden md:flex">
+        <div className="p-3 border-b border-black/[0.04]">
           <button 
             onClick={createNewSession}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-black/[0.06] rounded-lg text-[13px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             Жаңа чат
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {sessions.map((session) => (
             <div key={session.id} className="relative group">
               {editingSessionId === session.id ? (
                 <form 
                   onSubmit={(e) => handleRenameSubmit(session.id, e)}
-                  className="flex items-center gap-2 px-3 py-2 bg-[#EBF5FB] rounded-lg border border-[#2E86C1]"
+                  className="flex items-center gap-2 px-3 py-2 bg-[#0071e3]/10 rounded-lg border border-[#0071e3]/20"
                 >
-                  <MessageSquare className="w-4 h-4 text-[#1A5276] flex-shrink-0" />
+                  <MessageSquare className="w-3.5 h-3.5 text-[#0071e3] flex-shrink-0" />
                   <input
                     autoFocus
                     value={editTitleBuffer}
                     onChange={e => setEditTitleBuffer(e.target.value)}
                     onBlur={() => handleRenameSubmit(session.id)}
-                    className="flex-1 bg-transparent border-b border-[#2E86C1] focus:outline-none text-sm font-medium text-[#1A5276]"
+                    className="flex-1 bg-transparent border-b border-[#0071e3]/30 focus:outline-none text-[13px] font-medium text-[#1d1d1f]"
                     onClick={e => e.stopPropagation()}
                   />
                 </form>
               ) : (
                 <button
                   onClick={() => setSessionId(session.id)}
-                  className={`w-full text-left px-3 py-3 rounded-lg flex items-center justify-between transition-colors ${
-                    sessionId === session.id ? 'bg-[#EBF5FB] text-[#1A5276]' : 'hover:bg-gray-200 text-gray-700'
+                  className={`w-full text-left px-3 py-[7px] rounded-lg flex items-center justify-between transition-colors ${
+                    sessionId === session.id ? 'bg-[#0071e3]/10 text-[#0071e3]' : 'hover:bg-black/[0.03] text-[#1d1d1f]/70'
                   }`}
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <MessageSquare className="w-4 h-4 flex-shrink-0" />
-                    <div className="truncate text-sm font-medium">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                    <div className="truncate text-[13px] font-medium">
                       {session.title || 'Жаңа чат'}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {session.isPinned && <Pin className="w-3.5 h-3.5 text-[#2E86C1] fill-[#2E86C1]" />}
+                    {session.isPinned && <Pin className="w-3 h-3 text-[#0071e3] fill-[#0071e3]" />}
                     <div 
-                      className={`p-1 rounded hover:bg-black/10 text-gray-500 transition-opacity ${menuOpenId === session.id ? 'opacity-100 bg-black/5' : 'opacity-0 group-hover:opacity-100'}`}
+                      className={`p-1 rounded-md hover:bg-black/[0.06] text-[#86868b] transition-opacity ${menuOpenId === session.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       onClick={(e) => {
                          e.stopPropagation();
                          setMenuOpenId(menuOpenId === session.id ? null : session.id);
                       }}
                     >
-                      <MoreHorizontal className="w-4 h-4" />
+                      <MoreHorizontal className="w-3.5 h-3.5" />
                     </div>
                   </div>
                 </button>
@@ -497,22 +490,22 @@ export default function Chat() {
               {menuOpenId === session.id && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={(e) => {e.stopPropagation(); setMenuOpenId(null);}}></div>
-                  <div className="absolute right-2 top-10 w-48 bg-white text-gray-700 border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 text-sm font-medium">
-                    <button onClick={handleShare} className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-3 transition-colors">
-                      <Share className="w-4 h-4 text-gray-400" /> Бөлісу
+                  <div className="absolute right-2 top-10 w-48 bg-white/95 backdrop-blur-xl text-[#1d1d1f] border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 text-[13px] font-medium">
+                    <button onClick={handleShare} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
+                      <Share className="w-3.5 h-3.5 text-[#86868b]" /> Бөлісу
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(session.id); setEditTitleBuffer(session.title); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-3 transition-colors">
-                      <Edit2 className="w-4 h-4 text-gray-400" /> Атауын өзгерту
+                    <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(session.id); setEditTitleBuffer(session.title); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
+                      <Edit2 className="w-3.5 h-3.5 text-[#86868b]" /> Атауын өзгерту
                     </button>
-                    <button onClick={(e) => handleTogglePin(session, e)} className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-3 transition-colors">
-                      <Pin className="w-4 h-4 text-gray-400" /> {session.isPinned ? 'Бекітуді алу' : 'Бекіту'}
+                    <button onClick={(e) => handleTogglePin(session, e)} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
+                      <Pin className="w-3.5 h-3.5 text-[#86868b]" /> {session.isPinned ? 'Бекітуді алу' : 'Бекіту'}
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-3 transition-colors">
-                      <Archive className="w-4 h-4 text-gray-400" /> Мұрағаттау
+                    <button onClick={(e) => { e.stopPropagation(); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
+                      <Archive className="w-3.5 h-3.5 text-[#86868b]" /> Мұрағаттау
                     </button>
-                    <div className="border-t border-gray-100 my-1"></div>
-                    <button onClick={(e) => { e.stopPropagation(); setSessionToDelete(session); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-3 transition-colors">
-                      <Trash2 className="w-4 h-4" /> Жою
+                    <div className="border-t border-black/[0.04] my-1"></div>
+                    <button onClick={(e) => { e.stopPropagation(); setSessionToDelete(session); setMenuOpenId(null); }} className="w-full text-left px-3.5 py-2 hover:bg-[#ff3b30]/[0.06] text-[#ff3b30] flex items-center gap-2.5 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" /> Жою
                     </button>
                   </div>
                 </>
@@ -525,56 +518,34 @@ export default function Chat() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full relative">
         {/* Chat Header */}
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white">
+        <div className="px-4 py-3 border-b border-black/[0.06] flex justify-between items-center bg-white/80 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={createNewSession}
-              className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-md"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
+            <button onClick={createNewSession} className="md:hidden p-1.5 text-[#86868b] hover:bg-black/[0.04] rounded-lg"><Plus className="w-5 h-5" /></button>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-gray-800">Құқықтық кеңесші</h2>
-                <button 
-                  onClick={() => setShowModelInfo(true)}
-                  className="text-gray-400 hover:text-[#2E86C1] transition-colors"
-                  title="Модель туралы ақпарат"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-500">Қазақстан заңнамасы бойынша сұрақтар</p>
+              <h2 className="text-[15px] font-semibold text-[#1d1d1f]">Құқықтық кеңесші</h2>
+              <p className="text-[11px] text-[#86868b]">ҚР заңнамасы бойынша</p>
             </div>
           </div>
           <div className="relative">
             <button 
               onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium bg-[#f5f5f7] text-[#1d1d1f]/70 border border-black/[0.06] hover:bg-[#e8e8ed] transition-colors"
             >
-              <BrainCircuit className="w-4 h-4" />
-              <span className="hidden sm:inline">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || "AI Моделі"}</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+              <BrainCircuit className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || "AI"}</span>
+              <ChevronDown className="w-3 h-3 opacity-50" />
             </button>
-
             {showModelDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)}></div>
-                <div className="absolute right-0 top-10 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 max-h-[350px] overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                    Нейрожелі моделін таңдау
-                  </div>
+                <div className="absolute right-0 top-10 mt-1 w-52 bg-white/95 backdrop-blur-xl border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 max-h-[350px] overflow-y-auto">
+                  <div className="px-3.5 py-2 text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">AI моделі</div>
                   {AVAILABLE_MODELS.map((model) => (
-                    <button
-                      key={model.id}
-                      onClick={() => {
-                        setSelectedModel(model.id);
-                        setShowModelDropdown(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-[14px] flex items-center justify-between hover:bg-gray-50 transition-colors ${selectedModel === model.id ? 'text-[#2E86C1] bg-blue-50/50 font-medium' : 'text-gray-700'}`}
+                    <button key={model.id} onClick={() => { setSelectedModel(model.id); setShowModelDropdown(false); }}
+                      className={`w-full text-left px-3.5 py-2 text-[13px] flex items-center justify-between hover:bg-black/[0.04] transition-colors ${selectedModel === model.id ? 'text-[#0071e3] font-semibold' : 'text-[#1d1d1f]/70'}`}
                     >
                       <span className="truncate pr-2">{model.name}</span>
-                      {selectedModel === model.id && <Check className="w-4 h-4 text-[#2E86C1] flex-shrink-0" />}
+                      {selectedModel === model.id && <Check className="w-3.5 h-3.5 text-[#0071e3] flex-shrink-0" />}
                     </button>
                   ))}
                 </div>
@@ -585,64 +556,51 @@ export default function Chat() {
 
         {/* Model Info Modal */}
         {showModelInfo && (
-          <div className="absolute top-16 left-4 md:left-1/4 z-10 w-80 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+          <div className="absolute top-14 left-4 md:left-1/4 z-10 w-72 bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-black/[0.06] p-4">
             <div className="flex justify-between items-start mb-3">
-              <h3 className="font-semibold text-gray-900">Жасанды Интеллект Модельдері</h3>
-              <button onClick={() => setShowModelInfo(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-4 h-4" />
-              </button>
+              <h3 className="text-[14px] font-semibold text-[#1d1d1f]">AI Модельдері</h3>
+              <button onClick={() => setShowModelInfo(false)} className="text-[#86868b] hover:text-[#1d1d1f]"><X className="w-4 h-4" /></button>
             </div>
-            
-            <div className="space-y-4 text-sm">
-              <div className={`p-3 rounded-md border bg-blue-50 border-blue-200`}>
-                <div className="flex items-center gap-2 font-medium text-gray-900 mb-1">
-                  <BrainCircuit className="w-4 h-4 text-blue-600" />
-                  ZanKenes AI (OpenRouter Auto)
-                </div>
-                <p className="text-gray-600 text-xs mb-2">Белсенді модель: Иә</p>
-                <ul className="list-disc pl-4 text-gray-600 text-xs space-y-1">
-                  <li>Жоғары жылдамдық және дәлдік.</li>
-                  <li>Қазақстан заңнамасын жақсы түсінеді.</li>
-                  <li>Күрделі құқықтық сұрақтарға талдау жасау қабілеті.</li>
-                </ul>
-              </div>
+            <div className="p-3 rounded-xl bg-[#f5f5f7] border border-black/[0.04]">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-[#1d1d1f] mb-1"><BrainCircuit className="w-3.5 h-3.5 text-[#0071e3]" />ZanKenes AI</div>
+              <ul className="text-[12px] text-[#86868b] space-y-0.5 mt-2"><li>• Жоғары жылдамдық</li><li>• ҚР заңнамасын түсінеді</li><li>• 11+ модель, auto-fallback</li></ul>
             </div>
           </div>
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-10">
-              <Bot className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>Сәлеметсіз бе! Мен ЗаңКеңес AI - сіздің құқықтық көмекшіңізбін.</p>
-              <p>Қандай заңнамалық сұрағыңыз бар?</p>
+            <div className="text-center mt-16">
+              <Bot className="w-10 h-10 mx-auto mb-3 text-[#d2d2d7]" />
+              <p className="text-[15px] text-[#1d1d1f] font-medium">Сәлеметсіз бе!</p>
+              <p className="text-[13px] text-[#86868b] mt-1">Заңнамалық сұрағыңызды жазыңыз.</p>
             </div>
           )}
           
           {messages.map((msg) => (
-            <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                msg.role === 'user' ? 'bg-[#2E86C1] text-white' : 
-                msg.role === 'system' ? 'bg-red-100 text-red-600' : 'bg-[#1A5276] text-white'
+            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                msg.role === 'user' ? 'bg-[#0071e3] text-white' : 
+                msg.role === 'system' ? 'bg-[#ff3b30]/10 text-[#ff3b30]' : 'bg-[#1d1d1f] text-white'
               }`}>
-                {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+                {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
-              <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${
-                msg.role === 'user' ? 'bg-[#2E86C1] text-white rounded-tr-none' : 
-                msg.role === 'system' ? 'bg-red-50 text-red-800 border border-red-100' : 'bg-gray-100 text-gray-800 rounded-tl-none'
+              <div className={`max-w-[80%] rounded-[18px] px-4 py-2.5 ${
+                msg.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-[4px]' : 
+                msg.role === 'system' ? 'bg-[#ff3b30]/[0.06] text-[#ff3b30] border border-[#ff3b30]/10' : 'bg-[#f5f5f7] text-[#1d1d1f] rounded-bl-[4px]'
               }`}>
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 ) : (
-                  <div className="markdown-body prose prose-sm max-w-none text-gray-800">
+                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f]">
                     <Markdown
                       components={{
                         a: ({node, href, children, ...props}) => {
                           if (href?.startsWith('/')) {
-                            return <Link to={href} {...(props as any)} className="text-[#2E86C1] hover:underline font-semibold bg-blue-50 px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
+                            return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-semibold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
                           }
-                          return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#2E86C1] hover:underline break-all" {...props}>{children}</a>;
+                          return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0071e3] hover:underline break-all" {...props}>{children}</a>;
                         }
                       }}
                     >
@@ -663,49 +621,22 @@ export default function Chat() {
                 )}
 
                 {msg.role === 'assistant' && (
-                  <div className="flex items-center gap-1 mt-2 pt-2 text-gray-400">
-                    <button 
-                      onClick={() => handleCopy(msg.id, msg.content)} 
-                      className="p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors" 
-                      title="Мәтінді көшіру"
-                    >
-                      {copiedId === msg.id ? <Check className="w-[18px] h-[18px] text-green-600" /> : <Copy className="w-[18px] h-[18px]" />}
+                  <div className="flex items-center gap-0.5 mt-2 pt-1.5 text-[#86868b]">
+                    <button onClick={() => handleCopy(msg.id, msg.content)} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors" title="Көшіру">
+                      {copiedId === msg.id ? <Check className="w-4 h-4 text-[#34c759]" /> : <Copy className="w-4 h-4" />}
                     </button>
-                    <button 
-                      onClick={() => toggleLike(msg.id)}
-                      className={`p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors ${likedIds[msg.id] ? 'bg-gray-200 text-gray-800' : ''}`} 
-                      title="Ұнады"
-                    >
-                      <ThumbsUp className="w-[18px] h-[18px]" fill={likedIds[msg.id] ? "currentColor" : "none"} />
+                    <button onClick={() => toggleLike(msg.id)} className={`p-1.5 hover:bg-black/[0.04] rounded-lg transition-colors ${likedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`} title="Ұнады">
+                      <ThumbsUp className="w-4 h-4" fill={likedIds[msg.id] ? "currentColor" : "none"} />
                     </button>
-                    <button 
-                      onClick={() => toggleDislike(msg.id)}
-                      className={`p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors ${dislikedIds[msg.id] ? 'bg-gray-200 text-gray-800' : ''}`} 
-                      title="Ұнамады"
-                    >
-                      <ThumbsDown className="w-[18px] h-[18px]" fill={dislikedIds[msg.id] ? "currentColor" : "none"} />
+                    <button onClick={() => toggleDislike(msg.id)} className={`p-1.5 hover:bg-black/[0.04] rounded-lg transition-colors ${dislikedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`} title="Ұнамады">
+                      <ThumbsDown className="w-4 h-4" fill={dislikedIds[msg.id] ? "currentColor" : "none"} />
                     </button>
-                    <button 
-                      onClick={() => setSharingMessage(msg)}
-                      className="p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors" 
-                      title="Бөлісу"
-                    >
-                      <Share className="w-[18px] h-[18px]" />
+                    <button onClick={() => setSharingMessage(msg)} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors" title="Бөлісу">
+                      <Share className="w-4 h-4" />
                     </button>
-                    <button 
-                      onClick={() => {
-                        const targetText = messages[messages.length-1].role === 'user' ? messages[messages.length-1].content : messages[messages.length-2]?.content || '';
-                        setInput(targetText);
-                      }}
-                      className="p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors group relative" 
-                    >
-                      <RefreshCw className="w-[18px] h-[18px]" />
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-black text-white text-xs whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                         Қайталап көр...<br/>{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name}
-                      </div>
-                    </button>
-                    <button className="p-1.5 hover:bg-gray-200 hover:text-gray-600 rounded-md transition-colors" title="Қосымша мәзір">
-                      <MoreHorizontal className="w-[18px] h-[18px]" />
+                    <button onClick={() => { const t = messages[messages.length-1].role === 'user' ? messages[messages.length-1].content : messages[messages.length-2]?.content || ''; setInput(t); }} className="p-1.5 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-lg transition-colors group relative">
+                      <RefreshCw className="w-4 h-4" />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-[#1d1d1f] text-white text-[11px] whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Қайталау</div>
                     </button>
                   </div>
                 )}
@@ -713,18 +644,18 @@ export default function Chat() {
             </div>
           ))}
           {isLoading && (
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1A5276] text-white flex items-center justify-center">
-                <Bot className="w-5 h-5" />
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center">
+                <Bot className="w-4 h-4" />
               </div>
-              <div className={`max-w-[80%] rounded-2xl ${streamingResponse ? 'px-5 py-3 bg-gray-100 rounded-tl-none text-gray-800' : 'bg-gray-100 rounded-tl-none px-5 py-4 flex items-center gap-2 text-gray-500'}`}>
+              <div className={`max-w-[80%] rounded-[18px] ${streamingResponse ? 'px-4 py-2.5 bg-[#f5f5f7] rounded-bl-[4px] text-[#1d1d1f]' : 'bg-[#f5f5f7] rounded-bl-[4px] px-4 py-3 flex items-center gap-2 text-[#86868b] text-[14px]'}`}>
                 {streamingResponse ? (
-                  <div className="markdown-body prose prose-sm max-w-none text-gray-800">
+                  <div className="markdown-body prose prose-sm max-w-none text-[#1d1d1f]">
                     <Markdown
                       components={{
                         a: ({node, href, children, ...props}) => {
-                          if (href?.startsWith('/')) return <Link to={href} {...(props as any)} className="text-[#2E86C1] hover:underline font-semibold bg-blue-50 px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
-                          return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#2E86C1] hover:underline break-all" {...props}>{children}</a>;
+                          if (href?.startsWith('/')) return <Link to={href} {...(props as any)} className="text-[#0071e3] hover:underline font-semibold bg-[#0071e3]/[0.06] px-2 py-0.5 rounded inline-flex items-center break-all">{children}</Link>;
+                          return <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#0071e3] hover:underline break-all" {...props}>{children}</a>;
                         }
                       }}
                     >
@@ -733,8 +664,8 @@ export default function Chat() {
                   </div>
                 ) : (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{isThinkingMode ? 'Терең талдау жасалуда...' : 'Жауап дайындалуда...'}</span>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{isThinkingMode ? 'Талдау…' : 'Жазуда…'}</span>
                   </>
                 )}
               </div>
@@ -792,53 +723,40 @@ export default function Chat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-gray-200">
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative">
+        <div className="p-3 bg-white/80 backdrop-blur-xl border-t border-black/[0.06]">
+          <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Сұрағыңызды осында жазыңыз..."
-              className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#2E86C1] focus:border-transparent"
+              placeholder="Сұрағыңызды жазыңыз…"
+              className="w-full pl-4 pr-12 py-2.5 bg-[#f5f5f7] border border-black/[0.06] rounded-full text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 transition-all"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-[#2E86C1] text-white rounded-full hover:bg-[#1A5276] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 bg-[#0071e3] text-white rounded-full hover:bg-[#0077ED] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5" />
             </button>
           </form>
-          <p className="text-center text-xs text-gray-400 mt-2">
-            AI қателіктер жіберуі мүмкін. Маңызды шешімдер қабылдамас бұрын заңгермен кеңесіңіз.
+          <p className="text-center text-[11px] text-[#86868b] mt-2">
+            AI қателіктер жіберуі мүмкін.
           </p>
         </div>
       </div>
 
       {sessionToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white border border-gray-200 rounded-[24px] p-6 max-w-[340px] w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Чатты жою керек пе?</h3>
-            <p className="text-gray-700 mb-2 text-[15px]">
-              <span className="font-bold text-gray-900">{sessionToDelete.title}</span> жойылады.
+          <div className="bg-white border border-black/[0.06] rounded-2xl p-6 max-w-[320px] w-full shadow-2xl">
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Чатты жою?</h3>
+            <p className="text-[14px] text-[#86868b] mb-6 leading-relaxed">
+              <span className="font-semibold text-[#1d1d1f]">{sessionToDelete.title}</span> — мұны қайтару мүмкін емес.
             </p>
-            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-              Осы чат барысында сақталған естеліктерді жою үшін параметрлерге өтіңіз.
-            </p>
-            <div className="flex items-center justify-end gap-3 text-[15px] font-medium">
-              <button 
-                onClick={() => setSessionToDelete(null)}
-                className="px-5 py-2.5 rounded-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 transition-colors"
-              >
-                Бас тарту
-              </button>
-              <button 
-                onClick={() => confirmDeleteSession(sessionToDelete.id)}
-                className="px-5 py-2.5 rounded-full bg-[#ef4444] hover:bg-[#dc2626] text-white transition-colors"
-              >
-                Жою
-              </button>
+            <div className="flex items-center justify-end gap-2 text-[14px] font-medium">
+              <button onClick={() => setSessionToDelete(null)} className="px-4 py-2 rounded-lg text-[#0071e3] hover:bg-[#0071e3]/[0.06] transition-colors">Бас тарту</button>
+              <button onClick={() => confirmDeleteSession(sessionToDelete.id)} className="px-4 py-2 rounded-lg bg-[#ff3b30] hover:bg-[#ff3b30]/90 text-white transition-colors">Жою</button>
             </div>
           </div>
         </div>
