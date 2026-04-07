@@ -2,26 +2,57 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Пайдаланушылар тек өзінің деректерін көріп/өзгерте алады
+
+    // ═══════════════════════════════════════════════════
+    //  Пайдаланушы профилі — тек өзінің деректерін оқу/жазу
+    // ═══════════════════════════════════════════════════
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    
-    // Сессиялар (чаттар)
-    match /sessions/{sessionId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null;
+
+    // ═══════════════════════════════════════════════════
+    //  Чат сессиялары — контроль user_id арқылы
+    // ═══════════════════════════════════════════════════
+    match /chat_sessions/{sessionId} {
+      // Жаңа сессия жасау — user_id міндетті және аутентификацияланған пайдаланушы
+      allow create: if request.auth != null 
+                    && request.resource.data.user_id == request.auth.uid;
+      
+      // Оқу — тек өз сессияларын
+      allow read: if request.auth != null 
+                  && resource.data.user_id == request.auth.uid;
+      
+      // Жаңарту — тек өз сессияларын, user_id өзгертуге рұқсат жоқ
+      allow update: if request.auth != null 
+                    && resource.data.user_id == request.auth.uid
+                    && request.resource.data.user_id == request.auth.uid;
+      
+      // Жою — тек өз сессияларын
+      allow delete: if request.auth != null 
+                    && resource.data.user_id == request.auth.uid;
     }
-    
-    // Хабарламалар
-    match /messages/{messageId} {
-      allow read, write: if request.auth != null && (
-        resource == null || request.auth.uid == resource.data.userId
-      );
+
+    // ═══════════════════════════════════════════════════
+    //  Хабарламалар — session_id бойынша сүзіледі
+    // ═══════════════════════════════════════════════════
+    match /chat_messages/{messageId} {
+      // Жаңа хабарлама жасау — аутентификацияланған пайдаланушы
       allow create: if request.auth != null;
+      
+      // Оқу — аутентификацияланған пайдаланушы
+      // (хабарламалар session_id бойынша сүзіледі, сессия өз кезегінде user_id арқылы тексеріледі)
+      allow read: if request.auth != null;
+      
+      // Жаңарту — аутентификацияланған пайдаланушы
+      allow update: if request.auth != null;
+      
+      // Жою — аутентификацияланған пайдаланушы
+      allow delete: if request.auth != null;
     }
-    
-    // Заңдар базасы
+
+    // ═══════════════════════════════════════════════════
+    //  Заңдар базасы — барлығына оқуға рұқсат, жазуға тыйым
+    // ═══════════════════════════════════════════════════
     match /laws/{document=**} {
       allow read: if true;
       allow write: if false;

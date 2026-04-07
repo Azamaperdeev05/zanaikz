@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import { User, Globe, MapPin, Loader2, CheckCircle2, PieChart, TrendingUp, Search } from 'lucide-react';
 import { useLangStore } from '../store/langStore';
 import { t } from '../utils/i18n';
@@ -105,26 +106,28 @@ export default function Profile() {
         language: formData.language,
         region: formData.region
       });
-      // Sync global state immediately
-      if (formData.language === 'kk' || formData.language === 'ru') {
-        setLang(formData.language);
-      }
       setMessage({ type: 'success', text: t(lang, 'profile', 'save') + ' ✅' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error("Error updating profile:", error);
-      setMessage({ type: 'error', text: 'Error' });
+      setMessage({ type: 'error', text: lang === 'kk' ? 'Қате орын алды' : 'Произошла ошибка' });
     } finally {
       setSaving(false);
     }
   };
 
+  const handleLanguageChange = (newLang: 'kk' | 'ru') => {
+    setFormData({...formData, language: newLang});
+    setLang(newLang); // Update global state immediately
+  };
+
+
   if (!user) {
     return (
       <div className="flex items-center justify-center h-full bg-[#f5f5f7]">
         <div className="text-center">
-          <h2 className="text-[20px] font-bold text-[#1d1d1f] mb-3">Кіріңіз</h2>
-          <a href="/login" className="text-[14px] font-medium text-white bg-[#0071e3] px-5 py-2 rounded-full">Кіру</a>
+          <h2 className="text-[20px] font-bold text-[#1d1d1f] mb-3">{lang === 'kk' ? 'Кіріңіз' : 'Войдите'}</h2>
+          <Link to="/login" className="text-[14px] font-medium text-white bg-[#0071e3] px-5 py-2 rounded-full inline-block">{t(lang, 'nav', 'login')}</Link>
         </div>
       </div>
     );
@@ -167,25 +170,25 @@ export default function Profile() {
             name="full_name"
             value={formData.full_name}
             onChange={handleChange}
-            className="block w-full px-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 focus:border-[#0071e3]/40 transition-all"
+            className="block w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-[16px] text-[15px] text-[#1d1d1f] focus:outline-none focus:ring-4 focus:ring-[#0071e3]/10 focus:bg-white focus:border-[#0071e3]/20 transition-all font-medium"
           />
         </div>
 
         {/* Language */}
         <div>
-          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Интерфейс тілі / Язык интерфейса</label>
-          <div className="flex bg-[#f5f5f7] p-1 rounded-xl border border-black/[0.04]">
+          <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">{lang === 'kk' ? 'Интерфейс тілі' : 'Язык интерфейса'}</label>
+          <div className="flex bg-[#f5f5f7] p-1.5 rounded-[16px] border border-black/[0.03]">
             <button 
               type="button"
-              onClick={() => setFormData({...formData, language: 'kk'})} 
-              className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${formData.language === 'kk' ? 'bg-white shadow-sm text-[#1d1d1f]' : 'text-[#86868b]'}`}
+              onClick={() => handleLanguageChange('kk')} 
+              className={`flex-1 py-2.5 text-[14px] font-bold rounded-[12px] transition-all duration-200 ${lang === 'kk' ? 'bg-white shadow-md text-[#0071e3] scale-[1.02]' : 'text-[#86868b] hover:text-[#1d1d1f]'}`}
             >
               Қазақша
             </button>
             <button 
               type="button"
-              onClick={() => setFormData({...formData, language: 'ru'})} 
-              className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${formData.language === 'ru' ? 'bg-white shadow-sm text-[#1d1d1f]' : 'text-[#86868b]'}`}
+              onClick={() => handleLanguageChange('ru')} 
+              className={`flex-1 py-2.5 text-[14px] font-bold rounded-[12px] transition-all duration-200 ${lang === 'ru' ? 'bg-white shadow-md text-[#0071e3] scale-[1.02]' : 'text-[#86868b] hover:text-[#1d1d1f]'}`}
             >
               Русский
             </button>
@@ -201,7 +204,7 @@ export default function Profile() {
             value={formData.region}
             onChange={handleChange}
             placeholder={lang === 'kk' ? 'Мысалы: Астана' : 'Например: Астана'}
-            className="block w-full px-4 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-2 focus:ring-[#0071e3]/30 transition-all"
+            className="block w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-[16px] text-[15px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-4 focus:ring-[#0071e3]/10 focus:bg-white focus:border-[#0071e3]/20 transition-all font-medium"
           />
         </div>
 
@@ -210,37 +213,37 @@ export default function Profile() {
           <button
             type="submit"
             disabled={saving}
-            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#0071e3] text-white rounded-xl hover:bg-[#0077ED] disabled:opacity-50 transition-colors text-[14px] font-medium"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#0071e3] text-white rounded-[16px] hover:bg-[#0077ED] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 transition-all text-[15px] font-bold shadow-lg shadow-[#0071e3]/20"
           >
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {saving ? t(lang, 'nav', 'loading') : t(lang, 'profile', 'save')}
+            {saving && <Loader2 className="w-5 h-5 animate-spin" />}
+            {saving ? (lang === 'kk' ? 'Сақталуда…' : 'Сохранение…') : t(lang, 'profile', 'save')}
           </button>
         </div>
       </form>
 
       {/* Analytics Section */}
-      <div className="border-t border-black/[0.04] pt-8 pb-12">
+      <div className="border-t border-black/[0.04] pt-8 pb-32">
         <div className="flex items-center gap-2 mb-2">
           <PieChart className="w-5 h-5 text-[#0071e3]" />
           <h2 className="text-[18px] font-semibold text-[#1d1d1f]">{t(lang, 'profile', 'historyTitle')}</h2>
         </div>
-        <p className="text-[13px] text-[#86868b] mb-6">{t(lang, 'profile', 'historyDesc')}</p>
+        <p className="text-[13px] text-[#86868b] mb-6 font-medium">{t(lang, 'profile', 'historyDesc')}</p>
 
         {analyzing ? (
           <div className="flex justify-center py-6">
             <Loader2 className="w-5 h-5 animate-spin text-[#86868b]" />
           </div>
         ) : analytics.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {analytics.map((item, idx) => (
-              <div key={idx}>
-                <div className="flex justify-between text-[13px] mb-1.5">
-                  <span className="font-medium text-[#1d1d1f]">{item.topic}</span>
-                  <span className="text-[#86868b] font-medium">{item.count}%</span>
+              <div key={idx} className="group">
+                <div className="flex justify-between text-[13px] mb-2">
+                  <span className="font-bold text-[#1d1d1f] group-hover:text-[#0071e3] transition-colors">{item.topic}</span>
+                  <span className="text-[#0071e3] font-black">{item.count}%</span>
                 </div>
-                <div className="h-2 w-full bg-[#f5f5f7] rounded-full overflow-hidden">
+                <div className="h-3 w-full bg-[#f5f5f7] rounded-full overflow-hidden shadow-inner">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#0071e3] to-[#42a1ff] rounded-full transition-all duration-1000 ease-out"
+                    className="h-full bg-gradient-to-r from-[#0071e3] to-[#5ac8fa] rounded-full transition-all duration-1000 ease-out"
                     style={{ width: `${item.count}%` }}
                   />
                 </div>
@@ -248,13 +251,12 @@ export default function Profile() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 bg-[#f5f5f7] rounded-2xl border border-black/[0.03]">
-            <Search className="w-8 h-8 text-[#86868b]/50 mx-auto mb-2" />
-            <p className="text-[13px] text-[#86868b]">{t(lang, 'profile', 'noHistory')}</p>
+          <div className="text-center py-10 bg-[#f5f5f7] rounded-[24px] border border-black/[0.02]">
+            <Search className="w-10 h-10 text-[#86868b]/30 mx-auto mb-3" />
+            <p className="text-[14px] text-[#86868b] font-medium">{t(lang, 'profile', 'noHistory')}</p>
           </div>
         )}
       </div>
-
     </div>
   );
 }

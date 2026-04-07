@@ -1,21 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { db } from '../firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, updateDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
-import { Send, Bot, User, Loader2, BrainCircuit, Search, Plus, MessageSquare, Info, X, MoreHorizontal, Share, Edit2, Pin, Trash2, Archive, Check, ChevronDown, Copy, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs, where, updateDoc, doc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { Send, Bot, User, Loader2, BrainCircuit, Plus, MessageSquare, X, MoreHorizontal, Share, Edit2, Pin, Trash2, Check, ChevronDown, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useLangStore } from '../store/langStore';
 import { t } from '../utils/i18n';
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const MODEL = process.env.OPENROUTER_MODEL || "qwen/qwen3.6-plus:free";
 
 const AVAILABLE_MODELS = [
-  // DeepSeek models (default — own API)
   { id: "deepseek-chat", name: "DeepSeek V3", provider: "deepseek" },
   { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "deepseek" },
-  // OpenRouter models (fallback)
   { id: "qwen/qwen3.6-plus:free", name: "Qwen 3.6 Plus", provider: "openrouter" },
   { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "Nvidia Nemotron", provider: "openrouter" },
   { id: "minimax/minimax-m2.5:free", name: "MiniMax 2.5", provider: "openrouter" },
@@ -24,6 +23,12 @@ const AVAILABLE_MODELS = [
   { id: "z-ai/glm-4.5-air:free", name: "GLM 4.5 Air", provider: "openrouter" },
   { id: "openai/gpt-oss-120b:free", name: "GPT OSS 120B", provider: "openrouter" }
 ];
+
+// ─── Stable unique ID for optimistic (unsaved) sessions ───
+const DRAFT_PREFIX = '__draft__';
+let draftCounter = 0;
+const createDraftId = () => `${DRAFT_PREFIX}${++draftCounter}_${Date.now()}`;
+const isDraftId = (id: string | null) => id?.startsWith(DRAFT_PREFIX);
 
 interface Message {
   id: string;
@@ -40,19 +45,41 @@ interface ChatSession {
   isPinned?: boolean;
 }
 
+// ─── Laws cache (loaded once) ───
+interface LawEntry { title: string; article: string; content: string; tags: string[]; }
+let lawsCachePromise: Promise<LawEntry[]> | null = null;
+
+function getLawsCache(): Promise<LawEntry[]> {
+  if (!lawsCachePromise) {
+    lawsCachePromise = getDocs(collection(db, 'laws')).then(snap => {
+      const laws: LawEntry[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        laws.push({ title: data.title, article: data.article, content: data.content, tags: data.tags || [] });
+      });
+      return laws;
+    }).catch(err => {
+      console.error('Failed to load laws cache:', err);
+      lawsCachePromise = null; // retry next time
+      return [];
+    });
+  }
+  return lawsCachePromise;
+}
+
 export default function Chat() {
   const { user } = useAuthStore();
   const { lang } = useLangStore();
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+
+  // ─── State ───
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
-  const [sessionId, setSessionIdState] = useState<string | null>(urlSessionId || null);
-  const [isThinkingMode, setIsThinkingMode] = useState(false);
-  const [showModelInfo, setShowModelInfo] = useState(false);
+  const [sessionId, setSessionIdRaw] = useState<string | null>(urlSessionId || null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitleBuffer, setEditTitleBuffer] = useState('');
@@ -62,15 +89,45 @@ export default function Chat() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [dislikedIds, setDislikedIds] = useState<Record<string, boolean>>({});
-  const [sharingMessage, setSharingMessage] = useState<Message | null>(null);
+  const [chatFade, setChatFade] = useState(true); // animation state
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Keep ref in sync
+  // Constants for suggestions
+  const SUGGESTIONS_KK = [
+    "Қандай қиындық болып жатыр?",
+    "Қай заң қызықтырады?",
+    "Ипотекамен проблема болып жатыр ма?"
+  ];
+  const SUGGESTIONS_RU = [
+    "Какая у вас возникла трудность?",
+    "Какой закон вас интересует?",
+    "Проблема с ипотекой?"
+  ];
+
+  // Auto-reset height when input clears
+  useEffect(() => {
+    if (inputRef.current && input === '') {
+      inputRef.current.style.height = '56px';
+    }
+  }, [input]);
+
+  // ─── setSessionId with fade animation ───
+  const setSessionId = useCallback((id: string | null) => {
+    if (id === sessionIdRef.current) return;
+    setChatFade(false); // fade out
+    setTimeout(() => {
+      setSessionIdRaw(id);
+      setChatFade(true); // fade in
+    }, 120);
+  }, []);
+
   // Keep ref in sync & update URL
   useEffect(() => {
     sessionIdRef.current = sessionId;
-    if (sessionId) {
+    if (sessionId && !isDraftId(sessionId)) {
       navigate(`/chat/${sessionId}`, { replace: true });
     } else {
       navigate('/chat', { replace: true });
@@ -80,59 +137,68 @@ export default function Chat() {
   // Sync URL param → state
   useEffect(() => {
     if (urlSessionId && urlSessionId !== sessionId) {
-      setSessionIdState(urlSessionId);
+      setSessionIdRaw(urlSessionId);
     }
   }, [urlSessionId]);
 
-
-  // Fetch all sessions — NO sessionId dependency to avoid re-subscribe loops
+  // ─── Fetch all sessions ───
   useEffect(() => {
     if (!user) return;
-
     const q = query(collection(db, 'chat_sessions'), where('user_id', '==', user.uid), orderBy('updated_at', 'desc'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedSessions: ChatSession[] = [];
+      const fetched: ChatSession[] = [];
       snapshot.forEach((doc) => {
-        fetchedSessions.push({ id: doc.id, ...doc.data() } as ChatSession);
+        fetched.push({ id: doc.id, ...doc.data() } as ChatSession);
       });
       
-      fetchedSessions.sort((a, b) => {
+      fetched.sort((a, b) => {
         if (a.isPinned === b.isPinned) {
-          const aDate = a.updated_at?.toMillis() || 0;
-          const bDate = b.updated_at?.toMillis() || 0;
+          const aDate = a.updated_at?.toMillis?.() || 0;
+          const bDate = b.updated_at?.toMillis?.() || 0;
           return bDate - aDate;
         }
         return a.isPinned ? -1 : 1;
       });
       
-      setSessions(fetchedSessions);
+      setSessions(fetched);
       
-      // Auto-select first session if none selected
-      if (!sessionIdRef.current && fetchedSessions.length > 0) {
-        setSessionIdState(fetchedSessions[0].id);
+      // Auto-select first session if none selected and no draft open
+      if (!sessionIdRef.current && fetched.length > 0) {
+        setSessionIdRaw(fetched[0].id);
       }
+    }, (error) => {
+      console.error('Sessions snapshot error:', error.code, error.message);
     });
 
     return () => unsubscribe();
   }, [user]);
 
-  const createNewSession = async () => {
+  // ─── Optimistic "New Chat" — NO Firestore write ───
+  const createNewSession = useCallback(() => {
     if (!user) return;
-    const docRef = await addDoc(collection(db, 'chat_sessions'), {
-      user_id: user.uid,
-      title: 'Жаңа чат',
-      category: 'general',
-      is_encrypted: true,
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp()
-    });
-    setSessionIdState(docRef.id);
-  };
+    
+    // Егер қазірдің өзінде жаңа (бос) чатта тұрсақ, қайта ашпаймыз, тек input-қа фокус береміз
+    if (isDraftId(sessionIdRef.current)) {
+      inputRef.current?.focus();
+      return;
+    }
 
-  // Listen to messages for the current session
+    const draftId = createDraftId();
+    // Instantly clear messages + switch to draft
+    setMessages([]);
+    setStreamingResponse('');
+    setSessionIdRaw(draftId);
+    sessionIdRef.current = draftId;
+    navigate('/chat', { replace: true });
+    // Focus input after micro-delay for animation
+    setTimeout(() => inputRef.current?.focus(), 150);
+  }, [user, navigate]);
+
+  // ─── Listen to messages for the current session ───
   useEffect(() => {
-    if (!sessionId) {
+    // Draft sessions have no Firestore messages yet
+    if (!sessionId || isDraftId(sessionId)) {
       setMessages([]);
       return;
     }
@@ -161,7 +227,8 @@ export default function Chat() {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
-  const generateAndSaveTitle = async (sessionIdToUpdate: string, firstMessage: string) => {
+  // ─── Generate title in background ───
+  const generateAndSaveTitle = async (sid: string, firstMessage: string) => {
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -174,14 +241,8 @@ export default function Chat() {
         body: JSON.stringify({
           "model": MODEL,
           "messages": [
-            {
-              "role": "system",
-              "content": `Generate a very short, concise title (max 4-5 words) in ${lang === 'ru' ? 'Russian' : 'Kazakh'} for a chat session based on the user's first message. Return ONLY the title text without quotes.`
-            },
-            {
-              "role": "user",
-              "content": firstMessage
-            }
+            { "role": "system", "content": `Generate a very short, concise title (max 4-5 words) in ${lang === 'ru' ? 'Russian' : 'Kazakh'} for a chat session based on the user's first message. Return ONLY the title text without quotes.` },
+            { "role": "user", "content": firstMessage }
           ]
         })
       });
@@ -190,7 +251,7 @@ export default function Chat() {
       const generatedTitle = data.choices?.[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
       
       if (generatedTitle) {
-        await updateDoc(doc(db, 'chat_sessions', sessionIdToUpdate), {
+        await updateDoc(doc(db, 'chat_sessions', sid), {
           title: generatedTitle,
           updated_at: serverTimestamp()
         });
@@ -200,23 +261,18 @@ export default function Chat() {
     }
   };
 
+  // ─── Delete session ───
   const confirmDeleteSession = async (id: string) => {
     setSessionToDelete(null);
     
-    // Switch session immediately for instant UX
     if (sessionId === id) {
       const remaining = sessions.filter(s => s.id !== id);
-      setSessionIdState(remaining.length > 0 ? remaining[0].id : null);
+      setSessionId(remaining.length > 0 ? remaining[0].id : null);
     }
 
-    // Delete session doc
     deleteDoc(doc(db, 'chat_sessions', id));
-
-    // Delete all messages for this session in background
     getDocs(query(collection(db, 'chat_messages'), where('session_id', '==', id)))
-      .then(snapshot => {
-        snapshot.forEach(d => deleteDoc(d.ref));
-      });
+      .then(snapshot => { snapshot.forEach(d => deleteDoc(d.ref)); });
   };
 
   const handleCopy = (id: string, content: string) => {
@@ -251,10 +307,11 @@ export default function Chat() {
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    alert('Чатқа сілтеме көшірілді! (Демо)');
+    alert(lang === 'kk' ? 'Чатқа сілтеме көшірілді! (Демо)' : 'Ссылка на чат скопирована! (Демо)');
     setMenuOpenId(null);
   };
 
+  // ─── SEND MESSAGE — with lazy session creation ───
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !user || isLoading) return;
@@ -266,33 +323,41 @@ export default function Chat() {
     let currentSessionId = sessionId;
     const isFirstMessage = messages.length === 0;
 
-    // Create session if needed (fire-and-forget where possible)
-    if (!currentSessionId) {
-      const docRef = await addDoc(collection(db, 'chat_sessions'), {
-        user_id: user.uid,
-        title: userMessage.substring(0, 30) + '...',
-        category: 'general',
-        is_encrypted: true,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
-      });
-      currentSessionId = docRef.id;
-      setSessionIdState(currentSessionId);
+    // ── Lazy session: create Firestore doc only now ──
+    if (!currentSessionId || isDraftId(currentSessionId)) {
+      try {
+        const docRef = await addDoc(collection(db, 'chat_sessions'), {
+          user_id: user.uid,
+          title: userMessage.substring(0, 30) + (userMessage.length > 30 ? '…' : ''),
+          category: 'general',
+          is_encrypted: true,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp()
+        });
+        currentSessionId = docRef.id;
+        // Update state without re-triggering fade
+        setSessionIdRaw(currentSessionId);
+        sessionIdRef.current = currentSessionId;
+      } catch (err) {
+        console.error('Failed to create session:', err);
+        setIsLoading(false);
+        return;
+      }
     } else {
-      // Update session timestamp in background (don't await)
+      // Update session timestamp in background
       updateDoc(doc(db, 'chat_sessions', currentSessionId), {
-        ...(isFirstMessage ? { title: userMessage.substring(0, 30) + '...' } : {}),
+        ...(isFirstMessage ? { title: userMessage.substring(0, 30) + (userMessage.length > 30 ? '…' : '') } : {}),
         updated_at: serverTimestamp()
       });
     }
 
-    // Generate title in the background (don't await)
+    // Generate title in background
     if (isFirstMessage) {
       generateAndSaveTitle(currentSessionId, userMessage);
     }
 
     try {
-      // Save user message (don't await — Firestore listener picks it up)
+      // Save user message (fire-and-forget — listener picks it up)
       addDoc(collection(db, 'chat_messages'), {
         session_id: currentSessionId,
         role: 'user',
@@ -301,10 +366,7 @@ export default function Chat() {
       });
 
       // Prepare history
-      const history = messages.map(m => ({
-        role: m.role,
-        content: m.content
-      }));
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
 
       const systemInstructionKk = `Сен Қазақстан Республикасының заңнамасы бойынша құқықтық кеңесшісің (ЗаңКеңес AI). 
 Пайдаланушыларға қарапайым және түсінікті тілде жауап бер. МІНДЕТТІ ТҮРДЕ тек қазақ тілінде жауап бер.
@@ -334,32 +396,25 @@ export default function Chat() {
 
       const systemInstruction = lang === 'ru' ? systemInstructionRu : systemInstructionKk;
 
-      // RAG: Заңдар базасынан мәлімет іздеу (Keyword search)
+      // ── RAG: cached laws lookup ──
       let lawContext = '';
       try {
-        const lawsSnapshot = await getDocs(collection(db, 'laws'));
-        const matchedLaws: string[] = [];
+        const laws = await getLawsCache();
         const queryLower = userMessage.toLowerCase();
+        const matched = laws
+          .filter(law => law.tags.some(tag => queryLower.includes(tag.toLowerCase())))
+          .slice(0, 5); // max 5 relevant laws
         
-        lawsSnapshot.forEach(doc => {
-          const data = doc.data();
-          const tags = data.tags || [];
-          if (tags.some((tag: string) => queryLower.includes(tag.toLowerCase()))) {
-            matchedLaws.push(`- ${data.title} (${data.article}): ${data.content}`);
-          }
-        });
-        
-        if (matchedLaws.length > 0) {
-          lawContext = `\n\nПАЙДАЛАНУҒА МІНДЕТТІ ҚОСЫМША МӘЛІМЕТ (ҚР ЗАҢДАРЫ):\nСіз міндетті түрде төмендегі баптарды негізге ала отырып жауап беруіңіз керек:\n${matchedLaws.join('\n\n')}`;
+        if (matched.length > 0) {
+          lawContext = `\n\nПАЙДАЛАНУҒА МІНДЕТТІ ҚОСЫМША МӘЛІМЕТ (ҚР ЗАҢДАРЫ):\nСіз міндетті түрде төмендегі баптарды негізге ала отырып жауап беруіңіз керек:\n${matched.map(l => `- ${l.title} (${l.article}): ${l.content}`).join('\n\n')}`;
         }
       } catch (err) {
-        console.error('Error fetching laws for RAG:', err);
+        console.error('Error in RAG lookup:', err);
       }
 
       const finalSystemInstruction = systemInstruction + lawContext;
 
       let responseText = '';
-      let sources: any[] = [];
       
       const modelsToTry = [
         selectedModel,
@@ -367,14 +422,11 @@ export default function Chat() {
         "openrouter/free"
       ];
 
-      const getProviderForModel = (modelId: string) => {
-        const found = AVAILABLE_MODELS.find(m => m.id === modelId);
-        return found?.provider || 'openrouter';
-      };
+      const getProvider = (modelId: string) => AVAILABLE_MODELS.find(m => m.id === modelId)?.provider || 'openrouter';
 
       for (let i = 0; i < modelsToTry.length; i++) {
         try {
-          const provider = getProviderForModel(modelsToTry[i]);
+          const provider = getProvider(modelsToTry[i]);
           const isDeepSeek = provider === 'deepseek';
           
           const apiUrl = isDeepSeek
@@ -433,7 +485,7 @@ export default function Chat() {
                     const content = parsed.choices?.[0]?.delta?.content || '';
                     fullText += content;
                     setStreamingResponse(fullText);
-                  } catch (e) {}
+                  } catch {}
                 }
               }
             }
@@ -446,7 +498,9 @@ export default function Chat() {
           console.warn(`Fallback triggered. Model ${modelsToTry[i]} failed:`, aiError.message);
           if (i === modelsToTry.length - 1) {
             console.error('All fallback models exhausted.', aiError);
-            responseText = `Қате пайда болды: ${aiError.message || 'Белгісіз қате'}. Жүйе әкімшісіне хабарласыңыз.`;
+            responseText = lang === 'kk'
+              ? `Қате пайда болды: ${aiError.message || 'Белгісіз қате'}. Жүйе әкімшісіне хабарласыңыз.`
+              : `Ошибка: ${aiError.message || 'Неизвестная ошибка'}. Обратитесь к администратору.`;
           }
         }
       }
@@ -456,7 +510,7 @@ export default function Chat() {
         session_id: currentSessionId,
         role: 'assistant',
         content: responseText,
-        sources: sources,
+        sources: [],
         confidence_score: 0.95,
         created_at: serverTimestamp()
       });
@@ -467,7 +521,7 @@ export default function Chat() {
       addDoc(collection(db, 'chat_messages'), {
         session_id: currentSessionId,
         role: 'system',
-        content: 'Қате пайда болды. Қайтадан байқап көріңіз.',
+        content: lang === 'kk' ? 'Қате пайда болды. Қайтадан байқап көріңіз.' : 'Произошла ошибка. Попробуйте ещё раз.',
         created_at: serverTimestamp()
       });
       setStreamingResponse('');
@@ -477,23 +531,38 @@ export default function Chat() {
     }
   };
 
+  // ─── Combined sessions list (draft + real) ───
+  const sessionsList = useMemo(() => {
+    const isDraftActive = isDraftId(sessionId);
+    if (isDraftActive) {
+      const draftSession: ChatSession = {
+        id: sessionId!,
+        title: lang === 'kk' ? 'Жаңа чат' : 'Новый чат',
+        updated_at: null,
+        isPinned: false
+      };
+      return [draftSession, ...sessions];
+    }
+    return sessions;
+  }, [sessions, sessionId, lang]);
 
+  // ─── Render ───
   return (
     <div className="flex h-full bg-white">
-      {/* Sidebar for Chat Sessions */}
-      <div className="w-[220px] border-r border-black/[0.06] bg-[#f5f5f7]/80 backdrop-blur-xl flex flex-col hidden md:flex">
+      {/* ═══ Sidebar ═══ */}
+      <div className="w-[220px] border-r border-black/[0.06] bg-[#f5f5f7]/80 backdrop-blur-xl flex-col hidden md:flex">
         <div className="p-3 border-b border-black/[0.04]">
-            <button 
+          <button 
             onClick={createNewSession}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-black/[0.06] rounded-lg text-[13px] font-medium text-[#1d1d1f] hover:bg-[#e8e8ed] transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-black/[0.06] rounded-xl text-[13px] font-semibold text-[#1d1d1f] hover:bg-[#e8e8ed] active:scale-[0.97] transition-all shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             {lang === 'kk' ? 'Жаңа чат' : 'Новый чат'}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-          {sessions.map((session) => (
-            <div key={session.id} className="relative group">
+          {sessionsList.map((session) => (
+            <div key={session.id} className="relative group animate-in fade-in slide-in-from-left-1 duration-200">
               {editingSessionId === session.id ? (
                 <form 
                   onSubmit={(e) => handleRenameSubmit(session.id, e)}
@@ -511,9 +580,17 @@ export default function Chat() {
                 </form>
               ) : (
                 <button
-                  onClick={() => setSessionIdState(session.id)}
-                  className={`w-full text-left px-3 py-[7px] rounded-lg flex items-center justify-between transition-colors ${
-                    sessionId === session.id ? 'bg-[#0071e3]/10 text-[#0071e3]' : 'hover:bg-black/[0.03] text-[#1d1d1f]/70'
+                  onClick={() => {
+                    if (isDraftId(session.id)) {
+                      // Already active draft, do nothing
+                      return;
+                    }
+                    setSessionId(session.id);
+                  }}
+                  className={`w-full text-left px-3 py-[7px] rounded-lg flex items-center justify-between transition-all duration-200 ${
+                    sessionId === session.id 
+                      ? 'bg-[#0071e3]/10 text-[#0071e3] shadow-sm' 
+                      : 'hover:bg-black/[0.03] text-[#1d1d1f]/70'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 overflow-hidden">
@@ -524,15 +601,17 @@ export default function Chat() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {session.isPinned && <Pin className="w-3 h-3 text-[#0071e3] fill-[#0071e3]" />}
-                    <div 
-                      className={`p-1 rounded-md hover:bg-black/[0.06] text-[#86868b] transition-opacity ${menuOpenId === session.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                      onClick={(e) => {
-                         e.stopPropagation();
-                         setMenuOpenId(menuOpenId === session.id ? null : session.id);
-                      }}
-                    >
-                      <MoreHorizontal className="w-3.5 h-3.5" />
-                    </div>
+                    {!isDraftId(session.id) && (
+                      <div 
+                        className={`p-1 rounded-md hover:bg-black/[0.06] text-[#86868b] transition-opacity ${menuOpenId === session.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        onClick={(e) => {
+                           e.stopPropagation();
+                           setMenuOpenId(menuOpenId === session.id ? null : session.id);
+                        }}
+                      >
+                        <MoreHorizontal className="w-3.5 h-3.5" />
+                      </div>
+                    )}
                   </div>
                 </button>
               )}
@@ -541,7 +620,7 @@ export default function Chat() {
               {menuOpenId === session.id && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={(e) => {e.stopPropagation(); setMenuOpenId(null);}}></div>
-                  <div className="absolute right-2 top-10 w-48 bg-white/95 backdrop-blur-xl text-[#1d1d1f] border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 text-[13px] font-medium">
+                  <div className="absolute right-2 top-10 w-48 bg-white/95 backdrop-blur-xl text-[#1d1d1f] border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 text-[13px] font-medium animate-in fade-in zoom-in-95 duration-150">
                     <button onClick={handleShare} className="w-full text-left px-3.5 py-2 hover:bg-black/[0.04] flex items-center gap-2.5 transition-colors">
                       <Share className="w-3.5 h-3.5 text-[#86868b]" /> {lang === 'kk' ? 'Бөлісу' : 'Поделиться'}
                     </button>
@@ -563,7 +642,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Main Chat Area */}
+      {/* ═══ Main Chat Area ═══ */}
       <div className="flex-1 flex flex-col h-full relative">
         {/* Chat Header */}
         <div className="px-4 py-3 border-b border-black/[0.06] flex justify-between items-center bg-white/80 backdrop-blur-xl">
@@ -583,21 +662,64 @@ export default function Chat() {
               <span className="hidden sm:inline">{AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || "AI"}</span>
               <ChevronDown className="w-3 h-3 opacity-50" />
             </button>
+            {showModelDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)}></div>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white/95 backdrop-blur-xl border border-black/[0.06] rounded-xl shadow-xl z-50 py-1 text-[13px] font-medium animate-in fade-in zoom-in-95 duration-150">
+                  {AVAILABLE_MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setShowModelDropdown(false); }}
+                      className={`w-full text-left px-3.5 py-2 flex items-center justify-between hover:bg-black/[0.04] transition-colors ${selectedModel === m.id ? 'text-[#0071e3]' : 'text-[#1d1d1f]'}`}
+                    >
+                      <span>{m.name}</span>
+                      {selectedModel === m.id && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {messages.length === 0 && (
-            <div className="text-center mt-16">
-              <Bot className="w-10 h-10 mx-auto mb-3 text-[#d2d2d7]" />
-              <p className="text-[15px] text-[#1d1d1f] font-medium">{lang === 'kk' ? 'Сәлеметсіз бе!' : 'Здравствуйте!'}</p>
-              <p className="text-[13px] text-[#86868b] mt-1">{lang === 'kk' ? 'Заңнамалық сұрағыңызды жазыңыз.' : 'Задайте ваш юридический вопрос.'}</p>
+        {/* ═══ Messages Area with fade ═══ */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-5"
+          style={{ 
+            opacity: chatFade ? 1 : 0, 
+            transform: chatFade ? 'translateY(0)' : 'translateY(6px)',
+            transition: 'opacity 150ms ease, transform 150ms ease' 
+          }}
+        >
+          {messages.length === 0 && !isLoading && (
+            <div className="flex flex-col items-center justify-center mt-12 mb-8 animate-in fade-in zoom-in-95 duration-300">
+              <Bot className="w-12 h-12 mx-auto mb-4 text-[#0071e3]" />
+              <p className="text-[20px] text-[#1d1d1f] font-semibold mb-2">{lang === 'kk' ? 'Немен айналысып жатырсыз?' : 'Чем могу помочь?'}</p>
+              <p className="text-[14px] text-[#86868b] mb-8">{lang === 'kk' ? 'Заңнамалық сұрағыңызды жазыңыз немесе төмендегілердің бірін таңдаңыз.' : 'Задайте ваш юридический вопрос или выберите один из вариантов.'}</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-4xl px-2">
+                {(lang === 'kk' ? SUGGESTIONS_KK : SUGGESTIONS_RU).map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setInput(prompt);
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                        inputRef.current.style.height = 'auto';
+                        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
+                      }
+                    }}
+                    className="p-4 bg-white border border-black/[0.06] rounded-2xl text-left text-[14px] font-medium text-[#1d1d1f] hover:bg-black/[0.02] hover:border-[#0071e3]/30 transition-all shadow-sm active:scale-[0.98]"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           
           {messages.map((msg) => (
-            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div key={msg.id} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-1 duration-200 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
                 msg.role === 'user' ? 'bg-[#0071e3] text-white' : 
                 msg.role === 'system' ? 'bg-[#ff3b30]/10 text-[#ff3b30]' : 'bg-[#1d1d1f] text-white'
@@ -638,7 +760,7 @@ export default function Chat() {
                     <button onClick={() => toggleDislike(msg.id)} className={`p-2 hover:bg-black/[0.04] rounded-xl transition-colors ${dislikedIds[msg.id] ? 'text-[#1d1d1f]' : ''}`}>
                       <ThumbsDown className="w-4 h-4" fill={dislikedIds[msg.id] ? "currentColor" : "none"} />
                     </button>
-                    <button onClick={() => setSharingMessage(msg)} className="p-2 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-xl transition-colors">
+                    <button onClick={() => navigator.clipboard.writeText(window.location.href)} className="p-2 hover:bg-black/[0.04] hover:text-[#1d1d1f] rounded-xl transition-colors">
                       <Share className="w-4 h-4" />
                     </button>
                   </div>
@@ -647,7 +769,7 @@ export default function Chat() {
             </div>
           ))}
           {isLoading && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#1d1d1f] text-white flex items-center justify-center">
                 <Bot className="w-4 h-4" />
               </div>
@@ -677,15 +799,29 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 bg-white/80 backdrop-blur-xl border-t border-black/[0.06] md:pb-24">
+        {/* ═══ Input Area ═══ */}
+        <div className="p-4 pb-24 md:pb-28 bg-white/80 backdrop-blur-xl border-t border-black/[0.06]">
           <form onSubmit={handleSend} className="max-w-4xl mx-auto relative group">
-            <input
-              type="text"
+            <textarea
+              ref={inputRef}
+              rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() && !isLoading) {
+                    handleSend(e as unknown as React.FormEvent);
+                  }
+                }
+              }}
               placeholder={lang === 'kk' ? 'Сұрағыңызды жазыңыз…' : 'Введите ваш вопрос…'}
-              className="w-full pl-6 pr-14 py-4 bg-[#f5f5f7] border border-transparent rounded-[24px] text-[16px] text-[#1d1d1f] shadow-sm transition-all focus:bg-white focus:border-[#0071e3]/20 focus:ring-4 focus:ring-[#0071e3]/5"
+              className="w-full pl-6 pr-14 py-4 bg-[#f5f5f7] border border-transparent rounded-[24px] text-[16px] text-[#1d1d1f] shadow-sm transition-all focus:bg-white focus:border-[#0071e3]/20 focus:ring-4 focus:ring-[#0071e3]/5 resize-none overflow-y-auto"
+              style={{ minHeight: '56px', maxHeight: '200px' }}
               disabled={isLoading}
             />
             <button
@@ -702,21 +838,21 @@ export default function Chat() {
         </div>
       </div>
 
+      {/* ═══ Delete confirmation modal ═══ */}
       {sessionToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white border border-black/[0.06] rounded-2xl p-6 max-w-[320px] w-full shadow-2xl">
-            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">Чатты жою?</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-black/[0.06] rounded-2xl p-6 max-w-[320px] w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-2">{lang === 'kk' ? 'Чатты жою?' : 'Удалить чат?'}</h3>
             <p className="text-[14px] text-[#86868b] mb-6 leading-relaxed">
-              <span className="font-semibold text-[#1d1d1f]">{sessionToDelete.title}</span> — мұны қайтару мүмкін емес.
+              <span className="font-semibold text-[#1d1d1f]">{sessionToDelete.title}</span> — {lang === 'kk' ? 'мұны қайтару мүмкін емес.' : 'это действие необратимо.'}
             </p>
             <div className="flex items-center justify-end gap-2 text-[14px] font-medium">
-              <button onClick={() => setSessionToDelete(null)} className="px-4 py-2 rounded-lg text-[#0071e3] hover:bg-[#0071e3]/[0.06] transition-colors">Бас тарту</button>
-              <button onClick={() => confirmDeleteSession(sessionToDelete.id)} className="px-4 py-2 rounded-lg bg-[#ff3b30] hover:bg-[#ff3b30]/90 text-white transition-colors">Жою</button>
+              <button onClick={() => setSessionToDelete(null)} className="px-4 py-2 rounded-lg text-[#0071e3] hover:bg-[#0071e3]/[0.06] transition-colors">{lang === 'kk' ? 'Бас тарту' : 'Отмена'}</button>
+              <button onClick={() => confirmDeleteSession(sessionToDelete.id)} className="px-4 py-2 rounded-lg bg-[#ff3b30] hover:bg-[#ff3b30]/90 text-white transition-colors">{lang === 'kk' ? 'Жою' : 'Удалить'}</button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
