@@ -83,7 +83,7 @@ export default function Lawyers() {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto pb-6">
+      <div className="flex-1 overflow-y-auto pb-24 md:pb-6">
         {filteredLawyers.length === 0 ? (
           <div className="text-center py-16 text-[#86868b] text-[14px] bg-white rounded-2xl border border-black/[0.04]">
             <MapPin className="w-10 h-10 mx-auto mb-3 text-[#d2d2d7]" />

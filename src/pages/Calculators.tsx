@@ -126,7 +126,7 @@ export default function Calculators() {
     switch (activeTab) {
       case 'alimony':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff2d55]/[0.08] rounded-2xl flex items-center justify-center text-[#ff2d55]"><Baby className="w-6 h-6" /></div>
               <div>
@@ -159,7 +159,7 @@ export default function Calculators() {
       case 'tax':
         const taxRes = calculateTaxes();
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff3b30]/[0.08] rounded-2xl flex items-center justify-center text-[#ff3b30]"><Receipt className="w-6 h-6" /></div>
               <div>
@@ -195,7 +195,7 @@ export default function Calculators() {
         );
       case 'mrp':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
              <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff9500]/[0.08] rounded-2xl flex items-center justify-center text-[#ff9500]"><Calculator className="w-6 h-6" /></div>
               <div>
@@ -225,7 +225,7 @@ export default function Calculators() {
         );
       case 'duty':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#34c759]/[0.08] rounded-2xl flex items-center justify-center text-[#34c759]"><Scale className="w-6 h-6" /></div>
               <div>
@@ -254,7 +254,7 @@ export default function Calculators() {
         );
       case 'severance':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#5856d6]/[0.08] rounded-2xl flex items-center justify-center text-[#5856d6]"><Briefcase className="w-6 h-6" /></div>
               <div>
@@ -284,7 +284,7 @@ export default function Calculators() {
         );
       case 'penalty':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff3b30]/[0.08] rounded-2xl flex items-center justify-center text-[#ff3b30]"><Clock className="w-6 h-6" /></div>
               <div>
@@ -315,7 +315,7 @@ export default function Calculators() {
       case 'maternity': {
         const matRes = calculateMaternity();
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff2d55]/[0.08] rounded-2xl flex items-center justify-center text-[#ff2d55]"><HeartPulse className="w-6 h-6" /></div>
               <div>
@@ -344,7 +344,7 @@ export default function Calculators() {
       }
       case 'pdd':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#ff9500]/[0.08] rounded-2xl flex items-center justify-center text-[#ff9500]"><ShieldAlert className="w-6 h-6" /></div>
               <div>
@@ -373,7 +373,7 @@ export default function Calculators() {
         );
       case 'carTax':
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#0071e3]/[0.08] rounded-2xl flex items-center justify-center text-[#0071e3]"><Car className="w-6 h-6" /></div>
               <div>
@@ -396,7 +396,7 @@ export default function Calculators() {
       case 'loan': {
         const loanRes = calculateLoan();
         return (
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[32px] border border-black/[0.04] shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-black/[0.04]">
               <div className="w-12 h-12 bg-[#af52de]/[0.08] rounded-2xl flex items-center justify-center text-[#af52de]"><CreditCard className="w-6 h-6" /></div>
               <div>
@@ -452,7 +452,7 @@ export default function Calculators() {
   ] as const;
 
   return (
-    <div className="flex flex-col lg:flex-row h-full p-5 lg:p-8 gap-8 max-w-[1400px] mx-auto overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-full p-4 lg:p-8 gap-4 lg:gap-8 max-w-[1400px] mx-auto overflow-hidden w-full box-border">
       {/* Mobile Title */}
       <div className="lg:hidden shrink-0">
         <h1 className="text-[20px] font-bold text-[#1d1d1f] tracking-tight mb-3">{t(lang, 'calculators', 'title')}</h1>
@@ -499,11 +499,11 @@ export default function Calculators() {
       </div>
 
       {/* Main Container */}
-      <div className="flex-1 lg:max-w-xl mx-auto w-full lg:pt-12 overflow-y-auto no-scrollbar pb-32">
+      <div className="flex-1 lg:max-w-xl mx-auto w-full lg:pt-12 overflow-y-auto overflow-x-hidden no-scrollbar pb-28 md:pb-32">
         {renderCalculator()}
         
         {/* Info Card */}
-        <div className="mt-8 bg-[#f5f5f7] p-7 rounded-[32px] border border-black/[0.02]">
+        <div className="mt-6 md:mt-8 bg-[#f5f5f7] p-5 md:p-7 rounded-[24px] md:rounded-[32px] border border-black/[0.02]">
            <div className="flex items-center gap-3 mb-3">
              <div className="p-2 bg-white rounded-xl shadow-sm"><CheckCircle2 className="w-5 h-5 text-[#34c759]" /></div>
              <h4 className="text-[14px] font-bold text-[#1d1d1f]">{lang === 'kk' ? 'Ескерту' : 'Примечание'}</h4>

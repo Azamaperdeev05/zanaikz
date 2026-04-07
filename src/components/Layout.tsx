@@ -93,7 +93,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden relative flex-col flex">
+      <main className="flex-1 overflow-hidden relative flex-col flex w-full">
         <Outlet />
       </main>
 

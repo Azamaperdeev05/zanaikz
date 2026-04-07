@@ -90,22 +90,33 @@ export default function Chat() {
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [dislikedIds, setDislikedIds] = useState<Record<string, boolean>>({});
   const [chatFade, setChatFade] = useState(true); // animation state
+  const [greeting, setGreeting] = useState(''); // dynamic greeting
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Constants for suggestions
-  const SUGGESTIONS_KK = [
+  const GREETINGS_KK = [
     "Қандай қиындық болып жатыр?",
     "Қай заң қызықтырады?",
-    "Ипотекамен проблема болып жатыр ма?"
+    "Ипотекамен проблема болып жатыр ма?",
+    "Сізге қандай заңгерлік көмек керек?",
+    "Кандай сұрағыңыз бар?"
   ];
-  const SUGGESTIONS_RU = [
+  const GREETINGS_RU = [
     "Какая у вас возникла трудность?",
     "Какой закон вас интересует?",
-    "Проблема с ипотекой?"
+    "Проблема с ипотекой?",
+    "Какая юридическая помощь вам нужна?",
+    "Какой у вас вопрос?"
   ];
+
+  // Pick a random greeting when session or language changes
+  useEffect(() => {
+    const list = lang === 'kk' ? GREETINGS_KK : GREETINGS_RU;
+    setGreeting(list[Math.floor(Math.random() * list.length)]);
+  }, [lang, sessionId]);
 
   // Auto-reset height when input clears
   useEffect(() => {
@@ -645,7 +656,7 @@ export default function Chat() {
       {/* ═══ Main Chat Area ═══ */}
       <div className="flex-1 flex flex-col h-full relative">
         {/* Chat Header */}
-        <div className="px-4 py-3 border-b border-black/[0.06] flex justify-between items-center bg-white/80 backdrop-blur-xl">
+        <div className="px-4 py-3 border-b border-black/[0.06] flex justify-between items-center bg-white/80 backdrop-blur-xl relative z-10">
           <div className="flex items-center gap-3">
             <button onClick={createNewSession} className="md:hidden p-1.5 text-[#86868b] hover:bg-black/[0.04] rounded-lg"><Plus className="w-5 h-5" /></button>
             <div>
@@ -692,29 +703,14 @@ export default function Chat() {
           }}
         >
           {messages.length === 0 && !isLoading && (
-            <div className="flex flex-col items-center justify-center mt-12 mb-8 animate-in fade-in zoom-in-95 duration-300">
-              <Bot className="w-12 h-12 mx-auto mb-4 text-[#0071e3]" />
-              <p className="text-[20px] text-[#1d1d1f] font-semibold mb-2">{lang === 'kk' ? 'Немен айналысып жатырсыз?' : 'Чем могу помочь?'}</p>
-              <p className="text-[14px] text-[#86868b] mb-8">{lang === 'kk' ? 'Заңнамалық сұрағыңызды жазыңыз немесе төмендегілердің бірін таңдаңыз.' : 'Задайте ваш юридический вопрос или выберите один из вариантов.'}</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-4xl px-2">
-                {(lang === 'kk' ? SUGGESTIONS_KK : SUGGESTIONS_RU).map((prompt, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setInput(prompt);
-                      if (inputRef.current) {
-                        inputRef.current.focus();
-                        inputRef.current.style.height = 'auto';
-                        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
-                      }
-                    }}
-                    className="p-4 bg-white border border-black/[0.06] rounded-2xl text-left text-[14px] font-medium text-[#1d1d1f] hover:bg-black/[0.02] hover:border-[#0071e3]/30 transition-all shadow-sm active:scale-[0.98]"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-col items-center justify-center h-[50vh] animate-in fade-in zoom-in-95 duration-300">
+              <Bot className="w-14 h-14 mx-auto mb-5 text-[#0071e3] opacity-90" />
+              <p className="text-[22px] md:text-[24px] text-[#1d1d1f] font-semibold mb-2 text-center px-4 leading-snug">
+                {greeting}
+              </p>
+              <p className="text-[14px] text-[#86868b] text-center max-w-sm mt-2 px-4">
+                {lang === 'kk' ? 'Заңға қатысты сұрағыңызды төмендегі жолаққа жазыңыз' : 'Напишите ваш юридический вопрос в поле ниже'}
+              </p>
             </div>
           )}
           
@@ -800,7 +796,7 @@ export default function Chat() {
         </div>
 
         {/* ═══ Input Area ═══ */}
-        <div className="p-4 pb-24 md:pb-28 bg-white/80 backdrop-blur-xl border-t border-black/[0.06]">
+        <div className="p-4 pb-28 md:pb-32 bg-white/80 backdrop-blur-xl border-t border-black/[0.06]">
           <form onSubmit={handleSend} className="max-w-4xl mx-auto relative group">
             <textarea
               ref={inputRef}

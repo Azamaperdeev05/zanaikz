@@ -31,9 +31,9 @@ export default function Templates() {
   const getCat = (tpl: typeof documentTemplates[0]) => lang === 'ru' ? tpl.category_ru : tpl.category;
 
   return (
-    <div className="p-5 lg:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-hidden">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full w-full flex flex-col overflow-hidden box-border">
       <div className="mb-5 shrink-0">
-        <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-1">{t(lang, 'templates', 'title')}</h1>
+        <h1 className="text-[22px] md:text-[28px] font-bold text-[#1d1d1f] tracking-tight mb-1">{t(lang, 'templates', 'title')}</h1>
         <p className="text-[14px] text-[#86868b]">{t(lang, 'templates', 'subtitle')}</p>
       </div>
       
@@ -55,17 +55,17 @@ export default function Templates() {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto pb-10">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24 md:pb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTemplates.map((tpl) => (
             <div 
               key={tpl.id} 
-              className="bg-white p-5 rounded-[28px] border border-black/[0.04] hover:border-black/[0.1] hover:shadow-xl transition-all group relative flex flex-col"
+              className="bg-white p-4 md:p-5 rounded-[24px] md:rounded-[28px] border border-black/[0.04] hover:border-black/[0.1] hover:shadow-xl transition-all group relative flex flex-col overflow-hidden min-w-0"
             >
               <div className="w-12 h-12 bg-[#0071e3]/[0.08] rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <FileText className="w-6 h-6 text-[#0071e3]" />
               </div>
-              <h3 className="text-[16px] font-bold text-[#1d1d1f] leading-tight mb-2 group-hover:text-[#0071e3] transition-colors">{getTitle(tpl)}</h3>
+              <h3 className="text-[15px] md:text-[16px] font-bold text-[#1d1d1f] leading-tight mb-2 group-hover:text-[#0071e3] transition-colors break-words">{getTitle(tpl)}</h3>
               <p className="text-[13px] text-[#86868b] line-clamp-2 mb-5 font-medium leading-relaxed flex-1">{getDesc(tpl)}</p>
               
               <a

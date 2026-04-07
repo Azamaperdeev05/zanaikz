@@ -71,19 +71,19 @@ export default function Laws() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full overflow-y-auto pb-32">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full w-full overflow-y-auto overflow-x-hidden pb-32 box-border">
       {/* Header Section */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-[#0071e3] rounded-lg">
             <Scale className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-[24px] md:text-[32px] font-extrabold text-[#1d1d1f] tracking-tight whitespace-nowrap">
+          <h1 className="text-[22px] md:text-[32px] font-extrabold text-[#1d1d1f] tracking-tight">
             {lang === 'kk' ? 'Заңнамалар базасы' : 'База законодательства'}
           </h1>
         </div>
-        <p className="text-[14px] md:text-[16px] text-[#86868b]">
-          {lang === 'kk' ? 'Қазақстан Республикасының қолданыстағы кодекстері мен заңдары' : 'Действующие кодексы и законы Республики Казахстан'}
+        <p className="text-[13px] md:text-[16px] text-[#86868b] leading-relaxed">
+          {lang === 'kk' ? 'ҚР қолданыстағы кодекстері мен заңдары' : 'Действующие кодексы и законы РК'}
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export default function Laws() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-8">
+      <div className="grid lg:grid-cols-12 gap-4 lg:gap-8 overflow-hidden">
         {/* Desktop Categories Sidebar */}
         <aside className="hidden lg:block lg:col-span-3 space-y-2">
           <div className="flex items-center gap-2 mb-4 px-3">
@@ -155,7 +155,7 @@ export default function Laws() {
               {paginatedActs.map((act, idx) => (
                 <div 
                   key={idx} 
-                  className="bg-white/70 backdrop-blur-sm p-6 rounded-[24px] border border-black/[0.03] hover:border-[#0071e3]/30 hover:shadow-xl hover:shadow-black/[0.02] transition-all group flex flex-col justify-between"
+                  className="bg-white/70 backdrop-blur-sm p-4 md:p-6 rounded-[20px] md:rounded-[24px] border border-black/[0.03] hover:border-[#0071e3]/30 hover:shadow-xl hover:shadow-black/[0.02] transition-all group flex flex-col justify-between min-w-0 overflow-hidden"
                 >
                   <div>
                     <div className="flex justify-between items-start mb-4">
@@ -170,7 +170,7 @@ export default function Laws() {
                         {act.type}
                       </span>
                     </div>
-                    <h3 className="text-[16px] font-bold text-[#1d1d1f] leading-tight mb-2 group-hover:text-[#0071e3] transition-colors line-clamp-2">
+                    <h3 className="text-[15px] md:text-[16px] font-bold text-[#1d1d1f] leading-tight mb-2 group-hover:text-[#0071e3] transition-colors line-clamp-2 break-words">
                       {lang === 'kk' ? act.title_kk : act.title_ru}
                     </h3>
                     <p className="text-[12px] text-[#86868b] mb-4">

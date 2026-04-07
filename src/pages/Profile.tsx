@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { User, Globe, MapPin, Loader2, CheckCircle2, PieChart, TrendingUp, Search } from 'lucide-react';
+import { User, Globe, MapPin, Loader2, CheckCircle2, PieChart, TrendingUp, Search, ChevronDown, X } from 'lucide-react';
 import { useLangStore } from '../store/langStore';
 import { t } from '../utils/i18n';
 
@@ -12,6 +12,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
   
   const { lang, setLang } = useLangStore();
   
@@ -121,6 +122,15 @@ export default function Profile() {
     setLang(newLang); // Update global state immediately
   };
 
+  const REGIONS = [
+    "Астана қаласы", "Алматы қаласы", "Шымкент қаласы",
+    "Абай облысы", "Ақмола облысы", "Ақтөбе облысы",
+    "Алматы облысы", "Атырау облысы", "Батыс Қазақстан облысы",
+    "Жамбыл облысы", "Жетісу облысы", "Қарағанды облысы",
+    "Қостанай облысы", "Қызылорда облысы", "Маңғыстау облысы",
+    "Павлодар облысы", "Солтүстік Қазақстан облысы", "Түркістан облысы",
+    "Ұлытау облысы", "Шығыс Қазақстан облысы"
+  ];
 
   if (!user) {
     return (
@@ -198,14 +208,16 @@ export default function Profile() {
         {/* Region */}
         <div>
           <label className="block text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">{lang === 'kk' ? 'Аймақ' : 'Регион'}</label>
-          <input
-            type="text"
-            name="region"
-            value={formData.region}
-            onChange={handleChange}
-            placeholder={lang === 'kk' ? 'Мысалы: Астана' : 'Например: Астана'}
-            className="block w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-[16px] text-[15px] text-[#1d1d1f] placeholder:text-[#86868b] focus:outline-none focus:ring-4 focus:ring-[#0071e3]/10 focus:bg-white focus:border-[#0071e3]/20 transition-all font-medium"
-          />
+          <button
+            type="button"
+            onClick={() => setIsRegionModalOpen(true)}
+            className="flex items-center justify-between w-full px-4 py-3 bg-[#f5f5f7] border border-transparent rounded-[16px] text-[15px] text-[#1d1d1f] hover:bg-black/[0.04] transition-all font-medium text-left"
+          >
+            <span className={formData.region ? "text-[#1d1d1f]" : "text-[#86868b]"}>
+              {formData.region || (lang === 'kk' ? 'Аймақты таңдаңыз' : 'Выберите регион')}
+            </span>
+            <ChevronDown className="w-5 h-5 text-[#86868b]" />
+          </button>
         </div>
 
         {/* Submit */}
@@ -257,6 +269,62 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {/* Regions Modal */}
+      {isRegionModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsRegionModalOpen(false)}
+          />
+          <div className="relative bg-[#f5f5f7] w-full max-w-4xl max-h-[90vh] rounded-[24px] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 md:p-6 bg-white border-b border-black/[0.04] shrink-0">
+              <div>
+                <h2 className="text-[20px] font-bold text-[#1d1d1f]">
+                  {lang === 'kk' ? 'Аймақты таңдау' : 'Выберите регион'}
+                </h2>
+                <p className="text-[13px] text-[#86868b] mt-1">
+                  Қазақстанның 20 өңірі
+                </p>
+              </div>
+              <button
+                onClick={() => setIsRegionModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center bg-[#f5f5f7] hover:bg-[#e8e8ed] text-[#86868b] rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 md:p-6 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                {REGIONS.map((region) => (
+                  <button
+                    key={region}
+                    onClick={() => {
+                      setFormData({ ...formData, region });
+                      setIsRegionModalOpen(false);
+                    }}
+                    className={`flex items-center gap-3 p-4 rounded-xl text-left transition-all active:scale-[0.98] ${
+                      formData.region === region
+                        ? 'bg-[#0071e3] text-white shadow-md'
+                        : 'bg-white hover:bg-[#0071e3]/5 border border-black/[0.04] hover:border-[#0071e3]/30 text-[#1d1d1f]'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      formData.region === region ? 'bg-white/20' : 'bg-[#f5f5f7]'
+                    }`}>
+                      <MapPin className={`w-4 h-4 ${formData.region === region ? 'text-white' : 'text-[#86868b]'}`} />
+                    </div>
+                    <span className="text-[14px] font-semibold leading-tight">{region}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
